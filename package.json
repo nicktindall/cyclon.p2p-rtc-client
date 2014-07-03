@@ -1,0 +1,40 @@
+{
+  "name": "cyclon.p2p-rtc",
+  "version": "0.0.1",
+  "description": "A generic WebRTC communications layer",
+  "keywords": [
+    "webrtc",
+    "cyclon.p2p"
+  ],
+  "homepage": "https://gitub.com/nicktindall/rtc-layer/wiki",
+  "bugs": "https://github.com/nicktindall/rtc-layer/issues",
+  "license": "MIT",
+  "author": {
+    "name": "Nick Tindall",
+    "email": "nick@tindall.id.au",
+    "url": "http://www.tindall.id.au"
+  },
+  "contributors": [
+    {
+      "name": "Aaron Harwood",
+      "email": "aharwood@unimelb.edu.au"
+    }
+  ],
+  "main": "lib/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicktindall/rtc-layer.git"
+  },
+  "scripts": {
+    "test": "make test"
+  },
+  "devDependencies": {
+    "istanbul": "0.2.x",
+    "jasmine-node": "1.14.x"
+  },
+  "dependencies": {
+    "bluebird": "2.1.x",
+    "cyclon.p2p": "0.0.x",
+    "socket.io-client": "1.0.x"
+  }
+}
