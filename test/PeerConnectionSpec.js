@@ -41,6 +41,7 @@ describe("The peer connection", function () {
         timingService = ClientMocks.mockTimingService();
         rtcObjectFactory = ClientMocks.mockRtcObjectFactory();
         rtcPeerConnection = ClientMocks.mockRtcPeerConnection();
+        rtcPeerConnection.localDescription = LOCAL_DESCRIPTION; // Does this really exist?
         rtcDataChannel = ClientMocks.mockRtcDataChannel();
         loggingService = ClientMocks.mockLoggingService();
 
@@ -111,6 +112,10 @@ describe("The peer connection", function () {
                     expect(successCallback).toHaveBeenCalled();
                     expect(failureCallback).not.toHaveBeenCalled();
                 });
+            });
+
+            it('makes the local description available via the getter', function() {
+                expect(peerConnection.getLocalDescription()).toBe(LOCAL_DESCRIPTION);
             });
         });
 
@@ -252,6 +257,10 @@ describe("The peer connection", function () {
             it("resolves with the gathered candidates", function() {
                 expect(successCallback).toHaveBeenCalledWith({sessionDescription: LOCAL_DESCRIPTION, iceCandidates: [firstIceCandidate, secondIceCandidate, thirdIceCandidate]});
                 expect(failureCallback).not.toHaveBeenCalled();
+            });
+
+            it('makes the ICE candidates available via a getter', function() {
+                expect(peerConnection.getLocalIceCandidates()).toEqual([firstIceCandidate, secondIceCandidate, thirdIceCandidate]);
             });
         });
 
