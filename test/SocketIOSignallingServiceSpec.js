@@ -86,7 +86,7 @@ describe("The socket.io signalling service", function () {
             signallingService.initialize(localCyclonNode, answerHandler, offerHandler);
         });
 
-        it("should emit a correctly structured offer message", function () {
+        it("should emit a correctly structured offer message and return the correlation ID", function () {
 
             runs(function() {
                 signallingService.sendOffer(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION, ICE_CANDIDATES).then(successCallback).catch(failureCallback);
@@ -96,7 +96,7 @@ describe("The socket.io signalling service", function () {
 
             runs(function() {
                 expect(httpRequestService.post).toHaveBeenCalledWith(SIGNALLING_BASE + "api/offer", {
-                    type: TYPE,
+                    channelType: TYPE,
                     sourceId: LOCAL_ID,
                     correlationId: 0,
                     sourcePointer: NODE_POINTER,
@@ -105,7 +105,7 @@ describe("The socket.io signalling service", function () {
                     iceCandidates: ICE_CANDIDATES
                 });
 
-                expect(successCallback).toHaveBeenCalled();
+                expect(successCallback).toHaveBeenCalledWith(0);
                 expect(failureCallback).not.toHaveBeenCalled();
             });
         });

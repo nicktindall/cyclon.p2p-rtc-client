@@ -9,7 +9,7 @@ module.exports.mockMessagingUtilities = function () {
 };
 
 module.exports.mockSignallingService = function () {
-    return jasmine.createSpyObj('signallingService', ['initialize', 'getSignallingInfo', 'sendOffer', 'sendAnswer', 'on', 'removeListener']);
+    return jasmine.createSpyObj('signallingService', ['initialize', 'getSignallingInfo', 'sendOffer', 'sendAnswer', 'on', 'removeListener', 'waitForAnswer']);
 };
 
 module.exports.mockCyclonNode = function () {
@@ -21,7 +21,7 @@ module.exports.mockAsyncExecService = function () {
 };
 
 module.exports.mockPeerConnection = function (name) {
-    return jasmine.createSpyObj(name || 'peerConnection', ['createOffer', 'createAnswer', 'waitForChannelEstablishment', 'waitForChannelToOpen', 'handleAnswer', 'close', 'waitForIceCandidates', 'cancel']);
+    return jasmine.createSpyObj(name || 'peerConnection', ['createOffer', 'createAnswer', 'waitForChannelEstablishment', 'waitForChannelToOpen', 'handleAnswer', 'close', 'waitForIceCandidates', 'cancel', 'getLocalDescription', 'getLocalIceCandidates']);
 };
 
 module.exports.mockTimingService = function () {
@@ -92,8 +92,8 @@ module.exports.createFailureCallback = function () {
     });
 };
 
-module.exports.mockPromise = function() {
-    var mockPromise = jasmine.createSpyObj('mockPromise', ['isPending', 'close', 'cancel', 'then', 'catch', 'cancellable']);
+module.exports.mockPromise = function(name) {
+    var mockPromise = jasmine.createSpyObj(name || 'mockPromise', ['isPending', 'close', 'cancel', 'then', 'catch', 'cancellable']);
     mockPromise.then.andReturn(mockPromise);
     mockPromise.cancellable.andReturn(mockPromise);
     mockPromise.catch.andReturn(mockPromise);
