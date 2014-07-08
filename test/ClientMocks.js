@@ -1,7 +1,9 @@
 "use strict";
 
+var ConsoleLogger = require("cyclon.p2p").ConsoleLogger;
+
 module.exports.mockLoggingService = function () {
-    return jasmine.createSpyObj('loggingService', ['error', 'debug', 'info', 'warn']);
+    return new ConsoleLogger();
 };
 
 module.exports.mockMessagingUtilities = function () {
@@ -36,6 +38,10 @@ module.exports.mockSignallingSocket = function () {
     return jasmine.createSpyObj('signallingSocket', ['getCurrentServerSpecs', 'initialize', 'on']);
 };
 
+module.exports.mockSocketFactory = function() {
+    return jasmine.createSpyObj('mockSocketFactory', ['createSocket']);
+}
+
 module.exports.mockHttpRequestService = function () {
     return jasmine.createSpyObj('httpRequestService', ['get', 'post']);
 };
@@ -66,6 +72,10 @@ module.exports.mockComms = function () {
 
 module.exports.mockStorage = function() {
     return jasmine.createSpyObj('storage', ['getItem', 'setItem']);
+};
+
+module.exports.mockSignallingServerService = function() {
+    return jasmine.createSpyObj('signallingServerService', ['getSignallingServerSpecs', 'getPreferredNumberOfSockets'])
 };
 
 //
