@@ -1,6 +1,7 @@
 'use strict';
 
 var Promise = require("bluebird");
+var events = require("events");
 var SocketIOSignallingService = require("../lib/SocketIOSignallingService");
 var ClientMocks = require("./ClientMocks");
 var UnreachableError = require("cyclon.p2p").UnreachableError;
@@ -20,9 +21,10 @@ describe("The socket.io signalling service", function () {
         capFailure;
 
     var LOCAL_ID = "LOCAL_ID";
+    var REMOTE_ID = "REMOTE_ID";
     var SIGNALLING_BASE = "http://signalling-base.com/path/to/";
     var DESTINATION_NODE = {
-        id: "DESTINATION_ID",
+        id: REMOTE_ID,
         comms: {
             signallingServers: [{
                 signallingApiBase: SIGNALLING_BASE
@@ -79,6 +81,15 @@ describe("The socket.io signalling service", function () {
             expect(signallingSocket.on).toHaveBeenCalledWith("offer", jasmine.any(Function));
         });
     });
+
+    describe("when getting the current signalling info", function() {
+
+        it("should delegate to the signalling socket", function() {
+            var SERVER_SPECS = "SERVER_SPECS";
+            signallingSocket.getCurrentServerSpecs.andReturn(SERVER_SPECS);
+            expect(signallingService.getSignallingInfo()).toBe(SERVER_SPECS);
+        });
+    })
 
     describe("when sending messages", function () {
 
@@ -177,6 +188,120 @@ describe("The socket.io signalling service", function () {
                 expect(errorIsInstanceOfUnreachableError).toBeTruthy();
                 expect(successCallback).not.toHaveBeenCalled();
             })
+        });
+    });
+
+    describe("when waiting for an answer", function() {
+
+        beforeEach(function() {
+            signallingSocket = new events.EventEmitter();
+            signallingSocket.initialize = jasmine.createSpy('initialize');
+
+            signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService);            
+            signallingService.initialize(localCyclonNode);
+        });
+
+        it("resolves with the answer message when the correlated answer arrives", function() {
+
+            var message = {
+                sourceId: REMOTE_ID,
+                correlationId: CORRELATION_ID
+            };
+
+            runs(function() {
+                signallingService.waitForAnswer(CORRELATION_ID).then(successCallback).catch(failureCallback);
+                signallingSocket.emit("answer", message);
+            });
+
+            waits(10);
+
+            runs(function() {
+                expect(successCallback).toHaveBeenCalledWith(message);
+                expect(failureCallback).not.toHaveBeenCalled();
+            });
+        });
+
+        it("ignores non-correlated answers", function() {
+
+            var message = {
+                sourceId: REMOTE_ID,
+                correlationId: "OTHER_"+CORRELATION_ID
+            };
+
+            runs(function() {
+                signallingService.waitForAnswer(CORRELATION_ID).then(successCallback).catch(failureCallback);
+                signallingSocket.emit("answer", message);
+            });
+
+            waits(10);
+
+            runs(function() {
+                expect(successCallback).not.toHaveBeenCalled();
+                expect(failureCallback).not.toHaveBeenCalled();
+            });
+        });
+
+        describe("and cancel is called", function() {
+
+            beforeEach(function() {
+
+                runs(function() {
+                    signallingService.waitForAnswer(CORRELATION_ID)
+                        .then(successCallback)
+                        .catch(Promise.CancellationError, failureCallback)
+                        .cancel();
+                });
+
+                waits(10);
+            });
+
+            it("rejects with a cancellation error", function() {
+                expect(successCallback).not.toHaveBeenCalled();
+                expect(failureCallback).toHaveBeenCalled();
+            });
+
+            it("stops listening for the answer message", function() {
+
+                var message = {
+                    sourceId: REMOTE_ID,
+                    correlationId: CORRELATION_ID
+                };
+
+                runs(function() {
+                    signallingSocket.emit("answer", message);
+                });
+
+                waits(10);
+
+                runs(function() {
+                    expect(successCallback).not.toHaveBeenCalled();
+                });
+            });
+        });
+    });
+
+    describe("when an offer is receieved", function() {
+
+        beforeEach(function() {
+            signallingSocket = new events.EventEmitter();
+            signallingSocket.initialize = jasmine.createSpy('initialize');
+
+            signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService);            
+            signallingService.initialize(localCyclonNode);
+        });
+
+        it("emits an offer event with the message", function() {
+        
+            var message = {
+                sourceId: REMOTE_ID,
+                correlationId: CORRELATION_ID
+            };
+
+            var offerHandler = jasmine.createSpy('offerHandler');
+            signallingService.on("offer", offerHandler);
+            signallingSocket.emit("offer", message);
+
+            expect(offerHandler).toHaveBeenCalledWith(message);
         });
     });
 });
