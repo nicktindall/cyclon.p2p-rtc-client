@@ -190,6 +190,7 @@ describe("The peer connection", function () {
                     rtcPeerConnection.onicecandidate({
                         candidate: thirdIceCandidate
                     });
+                    rtcPeerConnection.onicecandidate({})    // event with no candidate (ignored silently)
                     rtcPeerConnection.localDescription = LOCAL_DESCRIPTION;
                     rtcPeerConnection.iceGatheringState = "complete";
                     setTimeout(callback, 10);
@@ -261,6 +262,35 @@ describe("The peer connection", function () {
 
             it('makes the ICE candidates available via a getter', function() {
                 expect(peerConnection.getLocalIceCandidates()).toEqual([firstIceCandidate, secondIceCandidate, thirdIceCandidate]);
+            });
+        });
+
+        describe("when not completed", function() {
+
+            var gatheringStatusCallback;
+
+            beforeEach(function() {
+                runs(function() {
+                    rtcPeerConnection.iceGatheringState = "gathering";
+                    asyncExecService.setInterval.andCallFake(function (callback) {
+                        gatheringStatusCallback = callback;
+                    });
+                    peerConnection.waitForIceCandidates().then(successCallback).catch(failureCallback);
+                });
+
+                waits(10);
+
+                runs(function() {
+                    timingService.getCurrentTimeInMilliseconds.andReturn(CURRENT_TIME_MILLISECONDS + 1000);
+                    gatheringStatusCallback();
+                });
+
+                waits(10);
+            });
+
+            it("keeps waiting for candidates", function() {
+                expect(successCallback).not.toHaveBeenCalled();
+                expect(failureCallback).not.toHaveBeenCalled();
             });
         });
 
@@ -410,6 +440,10 @@ describe("The peer connection", function () {
 
         describe("and the channel is not already opened", function () {
 
+            beforeEach(function() {
+                rtcDataChannel.readyState = "connecting";
+            });
+
             describe("and the channel opens successfully", function () {
 
                 it("clears the timeout and passes an open channel to resolve", function () {
@@ -478,6 +512,47 @@ describe("The peer connection", function () {
                 it("calls reject with a cancellation error", function () {
                     expect(successCallback).not.toHaveBeenCalled();
                     expect(failureCallback).toHaveBeenCalledWith(jasmine.any(Promise.CancellationError));
+                });
+            });
+        });
+
+        describe("and the channel's readyState is undefined", function() {
+
+            beforeEach(function() {
+                rtcDataChannel.readyState = undefined;
+            });
+
+            it("waits for the channel to open", function() {
+                runs(function () {
+                    peerConnection.waitForChannelToOpen().then(successCallback).catch(failureCallback);
+                });
+
+                waits(10);
+
+                runs(function() {
+                    expect(successCallback).not.toHaveBeenCalled();
+                    expect(failureCallback).not.toHaveBeenCalled();
+                    expect(rtcDataChannel.onopen).toEqual(jasmine.any(Function));
+                });
+            });
+        });
+
+        describe("and the channel is in a state other than 'connecting', 'open' or undefined", function() {
+
+            beforeEach(function() {
+                rtcDataChannel.readyState = "closing";
+            });
+
+            it("rejects with an error", function() {
+                runs(function () {
+                    peerConnection.waitForChannelToOpen().then(successCallback).catch(failureCallback);
+                });
+
+                waits(10);
+
+                runs(function() {
+                    expect(successCallback).not.toHaveBeenCalled();
+                    expect(failureCallback).toHaveBeenCalled();
                 });
             });
         });
@@ -665,6 +740,57 @@ describe("The peer connection", function () {
 
                 expect(rtcDataChannel.close).toHaveBeenCalled();
                 expect(rtcPeerConnection.close).toHaveBeenCalled();
+            });
+        });
+    });
+
+    describe("when cancelling", function() {
+
+        it("will cancel the last outstanding promise if it's pending", function() {
+
+            runs(function() {
+                peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)
+                    .then(successCallback).catch(Promise.CancellationError, failureCallback);
+            });
+
+            waits(10);
+
+            runs(function() {
+                expect(successCallback).not.toHaveBeenCalled();
+                expect(failureCallback).not.toHaveBeenCalled();
+                peerConnection.cancel();
+            });
+
+            waits(10);
+
+            runs(function() {
+                expect(failureCallback).toHaveBeenCalled();
+            });
+        });
+
+        it("will not cancel the last outstanding promise if it's completed", function() {
+            
+            runs(function() {
+                rtcPeerConnection.createAnswer.andCallFake(function (successCallback) {
+                    successCallback(LOCAL_DESCRIPTION);
+                });
+
+                peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)
+                    .then(successCallback).catch(Promise.CancellationError, failureCallback);
+            });
+
+            waits(10);
+
+            runs(function() {
+                expect(successCallback).toHaveBeenCalled();
+                expect(failureCallback).not.toHaveBeenCalled();
+                peerConnection.cancel();
+            });
+
+            waits(10);
+
+            runs(function() {
+                expect(failureCallback).not.toHaveBeenCalled();
             });
         });
     });
