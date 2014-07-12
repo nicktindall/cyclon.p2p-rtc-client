@@ -1,5 +1,6 @@
 'use strict';
 
+var cyclon = require("cyclon.p2p");
 var ClientMocks = require("./ClientMocks");
 var RedundantSignallingSocket = require("../lib/RedundantSignallingSocket");
 var events = require("events");
@@ -69,47 +70,67 @@ describe('The RedundantSignallingSocket', function() {
 
 	describe('when connecting to initial server set', function() {
 
-		beforeEach(function() {
-			redundantSignallingSocket.initialize(localNode);
-		});
-
-		it('will connect to the number of servers specified', function() {
-			console.log(connectedServerSpecs);
-			expect(connectedServerSpecs.length).toEqual(2);
-		});
-
-		it('will schedule the connectivity check', function() {
-			expect(connectivityCheckCallback).toEqual(jasmine.any(Function));
-		});
-
-		it('will send a register message when a socket connects', function() {
-			var socketRegistered = false;
-			connectedSockets[0].on("register", function() {
-				socketRegistered = true;
+		describe('once initialized', function() {
+			beforeEach(function() {
+				redundantSignallingSocket.initialize(localNode);
 			});
-			connectedSockets[0].emit("connect");
-			expect(socketRegistered).toBe(true);
+
+			it('will connect to the number of servers specified', function() {
+				expect(connectedServerSpecs.length).toEqual(2);
+			});
+
+			it('will schedule the connectivity check', function() {
+				expect(connectivityCheckCallback).toEqual(jasmine.any(Function));
+			});
+
+			it('will send a register message when a socket connects', function() {
+				var socketRegistered = false;
+				connectedSockets[0].on("register", function() {
+					socketRegistered = true;
+				});
+				connectedSockets[0].emit("connect");
+				expect(socketRegistered).toBe(true);
+			});
+
+			it('will propagate answer events from the sockets', function() {
+				var answerEvent = null;
+				var ANSWER_EVENT = "ANSWER_EVENT";
+				redundantSignallingSocket.on("answer", function(e) {
+					answerEvent = e;
+				});
+				connectedSockets[0].emit("answer", ANSWER_EVENT);
+				expect(answerEvent).toBe(ANSWER_EVENT);
+			});
+
+			it('will propagate offer events from the sockets', function() {
+				var offerEvent = null;
+				var OFFER_EVENT = "OFFER_EVENT";
+				redundantSignallingSocket.on("offer", function(e) {
+					offerEvent = e;
+				});
+				connectedSockets[1].emit("offer", OFFER_EVENT);
+				expect(offerEvent).toBe(OFFER_EVENT);
+			});
 		});
 
-		it('will propagate answer events from the sockets', function() {
-			var answerEvent = null;
-			var ANSWER_EVENT = "ANSWER_EVENT";
-			redundantSignallingSocket.on("answer", function(e) {
-				answerEvent = e;
-			});
-			connectedSockets[0].emit("answer", ANSWER_EVENT);
-			expect(answerEvent).toBe(ANSWER_EVENT);
-		});
+		it('will prefer servers it was connected to previously', function() {
+			var inMemoryStorage = new cyclon.InMemoryStorage();
 
-		it('will propagate offer events from the sockets', function() {
-			var offerEvent = null;
-			var OFFER_EVENT = "OFFER_EVENT";
-			redundantSignallingSocket.on("offer", function(e) {
-				offerEvent = e;
-			});
-			connectedSockets[1].emit("offer", OFFER_EVENT);
-			expect(offerEvent).toBe(OFFER_EVENT);
-		});
+			var firstSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, inMemoryStorage, timingService);
+	 		firstSocket.initialize(localNode);
+
+			var secondSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, inMemoryStorage, timingService);
+	 		secondSocket.initialize(localNode);
+
+			expect(sortSignallingServers(firstSocket.getCurrentServerSpecs()))
+	 			.toEqual(sortSignallingServers(secondSocket.getCurrentServerSpecs()));
+
+	 		function sortSignallingServers(serverSpecs) {
+	 			return serverSpecs.sort(function(itemOne, itemTwo) {
+	 				return itemOne.signallingApiBase - itemTwo.signallingApiBase;
+	 			});
+	 		}
+	 	});
 	});
 
 	describe('when connected to a server set', function() {
