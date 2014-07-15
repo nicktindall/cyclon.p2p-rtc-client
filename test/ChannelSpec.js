@@ -5,7 +5,7 @@ var Channel = require("../lib/Channel");
 var Promise = require("bluebird");
 
 describe("The Channel", function() {
-	
+
 	var REMOTE_PEER = {},
 		CORRELATION_ID = 12345,
 		REMOTE_DESCRIPTION = "remoteSDP",
@@ -36,9 +36,9 @@ describe("The Channel", function() {
 		signallingService = ClientMocks.mockSignallingService();
 		logger = ClientMocks.mockLoggingService();
 		channel = new Channel(asyncExecService, REMOTE_PEER, CORRELATION_ID, peerConnection, signallingService, logger);
-	
+
 		peerConnection.getLocalDescription.andReturn(LOCAL_DESCRIPTION);
-		peerConnection.getLocalIceCandidates.andReturn(LOCAL_ICE_CANDIDATES);	
+		peerConnection.getLocalIceCandidates.andReturn(LOCAL_ICE_CANDIDATES);
 	});
 
 	describe('when getting the remote peer', function() {
@@ -95,7 +95,7 @@ describe("The Channel", function() {
 		it('sets the lastOutstandingPromise', function() {
 		 	channel.sendAnswer();
 		 	sendAnswerResult.isPending.andReturn(true);
-		 	channel.destroy();
+		 	channel.cancel();
 		 	expect(sendAnswerResult.cancel).toHaveBeenCalled();
 		});
 	});
@@ -121,19 +121,6 @@ describe("The Channel", function() {
 				expect(successCallback).toHaveBeenCalled();
 				expect(failureCallback).not.toHaveBeenCalled();
 			})
-		});
-
-		it('stores the data channel when resolved', function() {
-			runs(function() {				
-				channel.waitForChannelEstablishment();
-			});
-
-			waits(10);
-
-			runs(function() {
-				channel.destroy();
-				expect(rtcDataChannel.close).toHaveBeenCalled();
-			});
 		});
 	});
 
@@ -168,7 +155,7 @@ describe("The Channel", function() {
 		it('stores the promise for later cancellation', function() {
 			sendOfferResult.isPending.andReturn(true);
 			channel.sendOffer();
-			channel.destroy();
+			channel.cancel();
 			expect(sendOfferResult.cancel).toHaveBeenCalled();
 		});
 	});
@@ -189,7 +176,7 @@ describe("The Channel", function() {
 		it('stores the promise for later cancellation', function() {
 			waitForAnswerResult.isPending.andReturn(true);
 			channel.waitForAnswer();
-			channel.destroy();
+			channel.cancel();
 			expect(waitForAnswerResult.cancel).toHaveBeenCalled();
 		});
 	});
@@ -224,29 +211,16 @@ describe("The Channel", function() {
 			expect(peerConnection.waitForChannelToOpen).toHaveBeenCalled();
 		});
 
-		it('stores the peer connection for later closure', function() {
-			runs(function() {
-				channel.waitForChannelToOpen();				
-			});
-
-			waits(10);
-
-			runs(function() {
-				channel.destroy();
-				expect(rtcDataChannel.close).toHaveBeenCalled();
-			});
-		});
-
 		it('starts listening for messages on the opened channel', function() {
 			runs(function() {
-				channel.waitForChannelToOpen();				
+				channel.waitForChannelToOpen();
 			});
 
 			waits(10);
 
 			runs(function() {
 				expect(rtcDataChannel.onmessage).toEqual(jasmine.any(Function));
-			});			
+			});
 		});
 	});
 
@@ -270,7 +244,7 @@ describe("The Channel", function() {
 
 				waits(10);
 			});
-		
+
 			it('throws an error if the readyState is anything other than "open"', function() {
 				rtcDataChannel.readyState = "something other than 'open'";
 				expect(function() {
@@ -300,7 +274,7 @@ describe("The Channel", function() {
 		var RECEIVE_TIMEOUT_MS = 5011;
 
 		it('will reject with failure if the channel is not established', function() {
-			
+
 			runs(function() {
 				channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
 					.then(successCallback)
@@ -418,6 +392,17 @@ describe("The Channel", function() {
 					});
 				});
 			});
+		});
+	});
+
+	describe('when closing', function() {
+
+		beforeEach(function() {
+			channel.close();
+		});
+
+		it('calls close on the peerConnection', function() {
+			expect(peerConnection.close).toHaveBeenCalled();
 		});
 	});
 });

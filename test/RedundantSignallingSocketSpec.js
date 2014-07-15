@@ -47,7 +47,7 @@ describe('The RedundantSignallingSocket', function() {
 		timingService = ClientMocks.mockTimingService();
 
 		redundantSignallingSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, storage, timingService);
-	
+
 		socketFactory.createSocket.andCallFake(function(signallingSpec) {
 			connectedServerSpecs.push(signallingSpec);
 			var newSocket = new events.EventEmitter();
@@ -60,7 +60,7 @@ describe('The RedundantSignallingSocket', function() {
 		// static signalling socket preferring 2 of 4 total signalling servers
 		signallingServerService.getSignallingServerSpecs.andReturn([SIGNALLING_SPEC_1, SIGNALLING_SPEC_2, SIGNALLING_SPEC_3, SIGNALLING_SPEC_4]);
 		signallingServerService.getPreferredNumberOfSockets.andReturn(2);
-	
+
 		asyncExecService.setInterval.andCallFake(function(callback) {
 			connectivityCheckCallback = callback;
 		});
@@ -127,7 +127,12 @@ describe('The RedundantSignallingSocket', function() {
 
 	 		function sortSignallingServers(serverSpecs) {
 	 			return serverSpecs.sort(function(itemOne, itemTwo) {
-	 				return itemOne.signallingApiBase - itemTwo.signallingApiBase;
+					if(itemOne.signallingApiBase < itemTwo.signallingApiBase) {
+						return 1;
+					}
+					else {
+						return -1;
+					}
 	 			});
 	 		}
 	 	});
@@ -163,23 +168,23 @@ describe('The RedundantSignallingSocket', function() {
 
 		it('will connect to the server it least recently disconnected from when reconnecting', function() {
 			connectedSockets[0].emit("disconnect");
-			
+
 			// A minute later...
 			timingService.getCurrentTimeInMilliseconds.andReturn(currentTime + ONE_MINUTE);
 			connectedSockets[1].emit("disconnect");
-			
+
 			// Another minute later...
 			timingService.getCurrentTimeInMilliseconds.andReturn(currentTime + 2*ONE_MINUTE);
-			connectedSockets[2].emit("disconnect");				
-			
+			connectedSockets[2].emit("disconnect");
+
 			expect(connectedServerSpecs[4]).toEqual(connectedServerSpecs[0]);
 		});
 
 		it('will not attempt to connect to servers it disconnectedf from less than 30 seconds ago', function() {
 			connectedSockets[0].emit("disconnect");
 			connectedSockets[1].emit("disconnect");
-			connectedSockets[2].emit("disconnect");				
-			
+			connectedSockets[2].emit("disconnect");
+
 			expect(connectedServerSpecs.length).toEqual(4);
 		});
 	});
