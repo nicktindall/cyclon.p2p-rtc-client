@@ -1,13 +1,13 @@
 {
-  "name": "cyclon.p2p-rtc",
+  "name": "cyclon.p2p-rtc-client",
   "version": "0.0.1",
   "description": "A generic WebRTC communications layer",
   "keywords": [
     "webrtc",
     "cyclon.p2p"
   ],
-  "homepage": "https://gitub.com/nicktindall/rtc-layer/wiki",
-  "bugs": "https://github.com/nicktindall/rtc-layer/issues",
+  "homepage": "https://gitub.com/nicktindall/cyclon.p2p-rtc-client/wiki",
+  "bugs": "https://github.com/nicktindall/cyclon.p2p-rtc-client/issues",
   "license": "MIT",
   "author": {
     "name": "Nick Tindall",
@@ -23,13 +23,13 @@
   "main": "lib/index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nicktindall/rtc-layer.git"
+    "url": "https://github.com/nicktindall/cyclon.p2p-rtc-client.git"
   },
   "scripts": {
     "test": "make test"
   },
   "devDependencies": {
-    "istanbul": "0.2.x",
+    "istanbul": "0.3.x",
     "jasmine-node": "1.14.2"
   },
   "dependencies": {
