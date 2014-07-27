@@ -4,55 +4,53 @@ var Promise = require("bluebird");
 var events = require("events");
 var SocketIOSignallingService = require("../lib/SocketIOSignallingService");
 var ClientMocks = require("./ClientMocks");
-var UnreachableError = require("cyclon.p2p").UnreachableError;
+var UnreachableError = require("../lib/UnreachableError");
 
 describe("The socket.io signalling service", function () {
 
     var signallingService,
-        answerHandler,
-        offerHandler,
-        localCyclonNode,
         loggingService,
         signallingSocket,
         httpRequestService,
         successCallback,
         failureCallback,
         capSuccess,
-        capFailure;
+        capFailure,
+        storage;
 
     var LOCAL_ID = "LOCAL_ID";
     var REMOTE_ID = "REMOTE_ID";
     var SIGNALLING_BASE = "http://signalling-base.com/path/to/";
     var DESTINATION_NODE = {
         id: REMOTE_ID,
-        comms: {
-            signallingServers: [{
-                signallingApiBase: SIGNALLING_BASE
-            }]
-        }
+        signalling: [{
+            signallingApiBase: SIGNALLING_BASE
+        }]
     };
     var SESSION_DESCRIPTION = "SESSION_DESCRIPTION";
     var ICE_CANDIDATES = ["a", "b", "c"];
     var NODE_POINTER = "NODE_POINTER";
     var TYPE = "TYPE";
     var CORRELATION_ID = "CORRELATION_ID";
+    var LOCAL_SERVER_SPECS = [{signallingApiBase: "http://signalling.api/base"}];
 
     beforeEach(function () {
         successCallback = ClientMocks.createSuccessCallback();
         failureCallback = ClientMocks.createFailureCallback();
 
-        // Create mocks
-        answerHandler = jasmine.createSpy('answerHandler');
-        offerHandler = jasmine.createSpy('offerHandler');
-
-        localCyclonNode = ClientMocks.mockCyclonNode();
         loggingService = ClientMocks.mockLoggingService();
         signallingSocket = ClientMocks.mockSignallingSocket();
         httpRequestService = ClientMocks.mockHttpRequestService();
+        storage = ClientMocks.mockStorage();
 
-        // Mock behaviour
-        localCyclonNode.createNewPointer.andReturn(NODE_POINTER);
-        localCyclonNode.getId.andReturn(LOCAL_ID);
+        storage.getItem.andCallFake(function(itemId) {
+            if(itemId == "cyclon-rtc-local-node-id") {
+                return LOCAL_ID;
+            }
+            return null;
+        });
+
+        signallingSocket.getCurrentServerSpecs.andReturn(LOCAL_SERVER_SPECS);
 
         // Capture success/failure callbacks when post is called
         httpRequestService.post.andCallFake(function() {
@@ -60,47 +58,55 @@ describe("The socket.io signalling service", function () {
         });
         capSuccess = capFailure = null;
 
-        signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService);
+        signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
     });
 
-    describe("when initializing", function () {
-
-        beforeEach(function() {
-            signallingService.initialize(localCyclonNode, answerHandler, offerHandler);
-        });
-
-        it("should initialise the underlying signalling socket", function () {
-            expect(signallingSocket.initialize).toHaveBeenCalledWith(localCyclonNode);
-        });
-
-        it("should add a listener to invoke the answer handler on 'answer'", function () {
+    describe("in construction", function() {
+        it("should add a listener to propagate 'answer' events", function () {
             expect(signallingSocket.on).toHaveBeenCalledWith("answer", jasmine.any(Function));
         });
 
-        it("should add a listener to invoke the offerHandler on 'offer'", function () {
+        it("should add a listener to propagate 'offer' events", function () {
             expect(signallingSocket.on).toHaveBeenCalledWith("offer", jasmine.any(Function));
+        });
+
+        it("should add a listener to propagate 'candidates' events", function () {
+            expect(signallingSocket.on).toHaveBeenCalledWith("candidates", jasmine.any(Function));
         });
     });
 
-    describe("when getting the current signalling info", function() {
+    describe("when connecting", function () {
 
-        it("should delegate to the signalling socket", function() {
+        beforeEach(function() {
+            signallingService.connect();
+        });
+
+        it("should call connect on the underlying signalling socket", function () {
+            expect(signallingSocket.connect).toHaveBeenCalledWith(signallingService);
+        });
+    });
+
+    describe("when creating a new pointer", function() {
+
+        it("should delegate to the signalling socket for signalling data", function() {
             var SERVER_SPECS = "SERVER_SPECS";
             signallingSocket.getCurrentServerSpecs.andReturn(SERVER_SPECS);
-            expect(signallingService.getSignallingInfo()).toBe(SERVER_SPECS);
+            var pointer = signallingService.createNewPointer();
+            expect(pointer.signalling).toBe(SERVER_SPECS);
         });
-    })
+    });
 
     describe("when sending messages", function () {
 
         beforeEach(function () {
-            signallingService.initialize(localCyclonNode, answerHandler, offerHandler);
+            signallingService.connect();
         });
 
         it("should emit a correctly structured offer message and return the correlation ID", function () {
 
             runs(function() {
-                signallingService.sendOffer(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION, ICE_CANDIDATES).then(successCallback).catch(failureCallback);
+                signallingService.sendOffer(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION)
+                    .then(successCallback).catch(failureCallback);
             });
 
             waits(10);
@@ -110,10 +116,15 @@ describe("The socket.io signalling service", function () {
                     channelType: TYPE,
                     sourceId: LOCAL_ID,
                     correlationId: 0,
-                    sourcePointer: NODE_POINTER,
+                    sourcePointer: {
+                        id: LOCAL_ID,
+                        age: 0,
+                        seq: 0,
+                        signalling: LOCAL_SERVER_SPECS,
+                        metaData: {}
+                    },
                     destinationId: DESTINATION_NODE.id,
-                    sessionDescription: SESSION_DESCRIPTION,
-                    iceCandidates: ICE_CANDIDATES
+                    sessionDescription: SESSION_DESCRIPTION
                 });
 
                 expect(successCallback).toHaveBeenCalledWith(0);
@@ -124,7 +135,8 @@ describe("The socket.io signalling service", function () {
         it("should emit a correctly structured answer message", function () {
 
             runs(function() {
-                signallingService.sendAnswer(DESTINATION_NODE, CORRELATION_ID, SESSION_DESCRIPTION, ICE_CANDIDATES).then(successCallback).catch(failureCallback);
+                signallingService.sendAnswer(DESTINATION_NODE, CORRELATION_ID, SESSION_DESCRIPTION)
+                    .then(successCallback).catch(failureCallback);
             });
 
             waits(10);
@@ -134,8 +146,7 @@ describe("The socket.io signalling service", function () {
                     sourceId: LOCAL_ID,
                     correlationId: CORRELATION_ID,
                     destinationId: DESTINATION_NODE.id,
-                    sessionDescription: SESSION_DESCRIPTION,
-                    iceCandidates: ICE_CANDIDATES
+                    sessionDescription: SESSION_DESCRIPTION
                 });
 
                 expect(successCallback).toHaveBeenCalled();
@@ -148,13 +159,11 @@ describe("The socket.io signalling service", function () {
             var errorIsInstanceOfUnreachableError = false;
             var destinationNodeWithNoSignallingServers = {
                 id: "DESTINATION_ID",
-                comms: {
-                    signallingServers: []
-                }
+                signalling: []
             };
 
             runs(function() {
-                signallingService.sendAnswer(destinationNodeWithNoSignallingServers, SESSION_DESCRIPTION, ICE_CANDIDATES)
+                signallingService.sendAnswer(destinationNodeWithNoSignallingServers, SESSION_DESCRIPTION)
                     .then(successCallback)
                     .catch(function(error) {
                         errorIsInstanceOfUnreachableError = error instanceof UnreachableError;
@@ -195,10 +204,10 @@ describe("The socket.io signalling service", function () {
 
         beforeEach(function() {
             signallingSocket = new events.EventEmitter();
-            signallingSocket.initialize = jasmine.createSpy('initialize');
+            signallingSocket.connect = jasmine.createSpy('connect');
 
-            signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService);            
-            signallingService.initialize(localCyclonNode);
+            signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
+            signallingService.connect();
         });
 
         it("resolves with the answer message when the correlated answer arrives", function() {
@@ -280,14 +289,18 @@ describe("The socket.io signalling service", function () {
         });
     });
 
-    describe("when an offer is receieved", function() {
+    describe("when an offer is received", function() {
+
+        var offerHandler;
 
         beforeEach(function() {
-            signallingSocket = new events.EventEmitter();
-            signallingSocket.initialize = jasmine.createSpy('initialize');
+            offerHandler = jasmine.createSpy('offerHandler');
 
-            signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService);            
-            signallingService.initialize(localCyclonNode);
+            signallingSocket = new events.EventEmitter();
+            signallingSocket.connect = jasmine.createSpy('connect');
+
+            signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
+            signallingService.connect();
         });
 
         it("emits an offer event with the message", function() {
@@ -297,11 +310,39 @@ describe("The socket.io signalling service", function () {
                 correlationId: CORRELATION_ID
             };
 
-            var offerHandler = jasmine.createSpy('offerHandler');
             signallingService.on("offer", offerHandler);
             signallingSocket.emit("offer", message);
 
             expect(offerHandler).toHaveBeenCalledWith(message);
+        });
+    });
+
+    describe("when ICE candidates are received", function() {
+
+        var candidatesHandler;
+
+        beforeEach(function() {
+            candidatesHandler = jasmine.createSpy('candidatesHandler');
+
+            signallingSocket = new events.EventEmitter();
+            signallingSocket.connect = jasmine.createSpy('connect');
+
+            signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
+            signallingService.connect();
+        });
+
+        it("emits an candidates event with the message", function() {
+
+            var message = {
+                sourceId: REMOTE_ID,
+                correlationId: 1,
+                iceCandidates: [{signallingApiBase: "aaa"}, {signallingApiBase: "bbb"}]
+            };
+
+            signallingService.on("candidates-" + REMOTE_ID + "-1", candidatesHandler);
+            signallingSocket.emit("candidates", message);
+
+            expect(candidatesHandler).toHaveBeenCalledWith(message);
         });
     });
 });

@@ -9,7 +9,6 @@ describe("The Channel", function() {
 	var REMOTE_PEER = {},
 		CORRELATION_ID = 12345,
 		REMOTE_DESCRIPTION = "remoteSDP",
-		REMOTE_ICE_CANDIDATES = ['a', 'b', 'c'],
 		LOCAL_DESCRIPTION = "localSDP",
 		LOCAL_ICE_CANDIDATES = ['d', 'e', 'f'],
 		CHANNEL_TYPE = "CHANNEL_TYPE",
@@ -73,8 +72,8 @@ describe("The Channel", function() {
 		});
 
 		it('delegates to the peer connection', function() {
-			expect(channel.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)).toBe(createAnswerResult);
-			expect(peerConnection.createAnswer).toHaveBeenCalledWith(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES);
+			expect(channel.createAnswer(REMOTE_DESCRIPTION)).toBe(createAnswerResult);
+			expect(peerConnection.createAnswer).toHaveBeenCalledWith(REMOTE_DESCRIPTION);
 		});
 	});
 
@@ -124,19 +123,6 @@ describe("The Channel", function() {
 		});
 	});
 
-	describe('when waiting for ICE candidates', function() {
-
-		var WAIT_FOR_ICE_CANDIDATES_RESULT = "WAIT_FOR_ICE_CANDIDATES_RESULT";
-
-		beforeEach(function() {
-			peerConnection.waitForIceCandidates.andReturn(WAIT_FOR_ICE_CANDIDATES_RESULT);
-		});
-
-		it('delegates to the peer connection', function() {
-			expect(channel.waitForIceCandidates()).toBe(WAIT_FOR_ICE_CANDIDATES_RESULT);
-		});
-	});
-
 	describe('when sending an offer', function() {
 
 		var sendOfferResult;
@@ -148,8 +134,8 @@ describe("The Channel", function() {
 		});
 
 		it('delegates to the signalling service', function() {
-			expect(channel.sendOffer()).toBe(sendOfferResult);
-			expect(signallingService.sendOffer).toHaveBeenCalledWith(REMOTE_PEER, CHANNEL_TYPE, LOCAL_DESCRIPTION, LOCAL_ICE_CANDIDATES);
+			expect(channel.sendOffer(LOCAL_DESCRIPTION)).toBe(sendOfferResult);
+			expect(signallingService.sendOffer).toHaveBeenCalledWith(REMOTE_PEER, CHANNEL_TYPE, LOCAL_DESCRIPTION);
 		});
 
 		it('stores the promise for later cancellation', function() {

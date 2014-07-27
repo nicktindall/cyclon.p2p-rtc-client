@@ -1,6 +1,6 @@
 'use strict';
 
-var cyclon = require("cyclon.p2p");
+var Utils = require("cyclon.p2p-common");
 var ClientMocks = require("./ClientMocks");
 var RedundantSignallingSocket = require("../lib/RedundantSignallingSocket");
 var events = require("events");
@@ -26,25 +26,25 @@ describe('The RedundantSignallingSocket', function() {
 		loggingService,
 		asyncExecService,
 		redundantSignallingSocket,
-		localNode,
 		storage,
 		connectedServerSpecs,
 		connectedSockets,
 		connectivityCheckCallback,
 		timingService,
-		currentTime;
+		currentTime,
+        signallingService;
 
 	beforeEach(function() {
 		currentTime = new Date().getTime();
 		connectedServerSpecs = [];
 		connectedSockets = [];
-		localNode = ClientMocks.mockCyclonNode();
 		signallingServerService = ClientMocks.mockSignallingServerService();
 		socketFactory = ClientMocks.mockSocketFactory();
 		loggingService = ClientMocks.mockLoggingService();
 		asyncExecService = ClientMocks.mockAsyncExecService();
 		storage = ClientMocks.mockStorage();
 		timingService = ClientMocks.mockTimingService();
+        signallingService = ClientMocks.mockSignallingService();
 
 		redundantSignallingSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, storage, timingService);
 
@@ -72,7 +72,7 @@ describe('The RedundantSignallingSocket', function() {
 
 		describe('once initialized', function() {
 			beforeEach(function() {
-				redundantSignallingSocket.initialize(localNode);
+				redundantSignallingSocket.connect(signallingService);
 			});
 
 			it('will connect to the number of servers specified', function() {
@@ -114,13 +114,13 @@ describe('The RedundantSignallingSocket', function() {
 		});
 
 		it('will prefer servers it was connected to previously', function() {
-			var inMemoryStorage = new cyclon.InMemoryStorage();
+			var inMemoryStorage = Utils.newInMemoryStorage();
 
 			var firstSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, inMemoryStorage, timingService);
-	 		firstSocket.initialize(localNode);
+	 		firstSocket.connect(signallingService);
 
 			var secondSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, inMemoryStorage, timingService);
-	 		secondSocket.initialize(localNode);
+	 		secondSocket.connect(signallingService);
 
 			expect(sortSignallingServers(firstSocket.getCurrentServerSpecs()))
 	 			.toEqual(sortSignallingServers(secondSocket.getCurrentServerSpecs()));
@@ -141,7 +141,7 @@ describe('The RedundantSignallingSocket', function() {
 	describe('when connected to a server set', function() {
 
 		beforeEach(function() {
-			redundantSignallingSocket.initialize(localNode);
+			redundantSignallingSocket.connect(signallingService);
 		});
 
 		it('will connect to a server it has not attempted to connect to upon disconnect', function() {
@@ -192,7 +192,7 @@ describe('The RedundantSignallingSocket', function() {
 	describe('when executing connectivity checks', function() {
 
 		beforeEach(function() {
-			redundantSignallingSocket.initialize(localNode);
+			redundantSignallingSocket.connect(signallingService);
 		});
 
 		it('connects to an eligible server if the current number of connected servers is less than preferred', function() {

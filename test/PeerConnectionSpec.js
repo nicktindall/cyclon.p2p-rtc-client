@@ -145,194 +145,43 @@ describe("The peer connection", function () {
             var secondIceCandidate = "456";
             var thirdIceCandidate = "123";
 
-            runs(function() {
-                asyncExecService.setInterval.andCallFake(function (callback) {
-                    rtcPeerConnection.onicecandidate({
-                        candidate: firstIceCandidate
-                    });
-                    rtcPeerConnection.onicecandidate({
-                        candidate: secondIceCandidate
-                    });
-                    rtcPeerConnection.onicecandidate({
-                        candidate: thirdIceCandidate
-                    });
-                    rtcPeerConnection.localDescription = LOCAL_DESCRIPTION;
-                    rtcPeerConnection.iceGatheringState = "complete";
-                    setTimeout(callback, 10);
-                    return INTERVAL_ID;
-                
-                });
+            var iceCandidatesHandler = jasmine.createSpy();
+            peerConnection.on("iceCandidates", iceCandidatesHandler);
 
-                peerConnection.waitForIceCandidates().then(successCallback).catch(failureCallback);
+            peerConnection.startEmittingIceCandidates();
+
+            rtcPeerConnection.onicecandidate({
+                candidate: firstIceCandidate
+            });
+            rtcPeerConnection.onicecandidate({
+                candidate: secondIceCandidate
+            });
+            rtcPeerConnection.onicecandidate({
+                candidate: thirdIceCandidate
             });
 
-            waits(100);
-
-            runs(function() {
-                expect(successCallback).toHaveBeenCalledWith({sessionDescription: LOCAL_DESCRIPTION, iceCandidates: [firstIceCandidate, secondIceCandidate]});
-            });
-        });
-
-        describe("when completed by state being 'complete'", function() {
-
-            var firstIceCandidate = "123";
-            var secondIceCandidate = "456";
-            var thirdIceCandidate = "789";
-
-            beforeEach(function() {
-                asyncExecService.setInterval.andCallFake(function (callback) {
-                    rtcPeerConnection.onicecandidate({
-                        candidate: firstIceCandidate
-                    });
-                    rtcPeerConnection.onicecandidate({
-                        candidate: secondIceCandidate
-                    });
-                    rtcPeerConnection.onicecandidate({
-                        candidate: thirdIceCandidate
-                    });
-                    rtcPeerConnection.onicecandidate({})    // event with no candidate (ignored silently)
-                    rtcPeerConnection.localDescription = LOCAL_DESCRIPTION;
-                    rtcPeerConnection.iceGatheringState = "complete";
-                    setTimeout(callback, 10);
-                    return INTERVAL_ID;
-                });
-
-                runs(function () {
-                    peerConnection.waitForIceCandidates().then(successCallback).catch(failureCallback);
-                });
-
-                waits(100);
-            });
-
-            it("clears the complete checking interval", function() {
-                expect(asyncExecService.clearInterval).toHaveBeenCalledWith(INTERVAL_ID);
-            });
-
-            it("removes the onicecandidates listener", function() {
-                expect(rtcPeerConnection.onicecandidate).toBeNull();
-            });
-
-            it("resolves with the gathered candidates", function() {
-                expect(successCallback).toHaveBeenCalledWith({sessionDescription: LOCAL_DESCRIPTION, iceCandidates: [firstIceCandidate, secondIceCandidate, thirdIceCandidate]});
-                expect(failureCallback).not.toHaveBeenCalled();
-            });
-        });
-
-        describe("when completed by timeout", function () {
-            var firstIceCandidate = "123";
-            var secondIceCandidate = "456";
-            var thirdIceCandidate = "789";
-
-            beforeEach(function() {
-                asyncExecService.setInterval.andCallFake(function (callback) {
-                    rtcPeerConnection.onicecandidate({
-                        candidate: firstIceCandidate
-                    });
-                    rtcPeerConnection.onicecandidate({
-                        candidate: secondIceCandidate
-                    });
-                    rtcPeerConnection.onicecandidate({
-                        candidate: thirdIceCandidate
-                    });
-                    rtcPeerConnection.localDescription = LOCAL_DESCRIPTION;
-                    timingService.getCurrentTimeInMilliseconds.andReturn(CURRENT_TIME_MILLISECONDS + 8000);
-                    setTimeout(callback, 10);
-                    return INTERVAL_ID;
-                });
-
-                runs(function () {
-                    peerConnection.waitForIceCandidates().then(successCallback).catch(failureCallback);
-                });
-
-                waits(100);
-            });
-
-            it("clears the complete checking interval", function() {
-                expect(asyncExecService.clearInterval).toHaveBeenCalledWith(INTERVAL_ID);
-            });
-
-            it("removes the onicecandidates listener", function() {
-                expect(rtcPeerConnection.onicecandidate).toBeNull();
-            });
-
-            it("resolves with the gathered candidates", function() {
-                expect(successCallback).toHaveBeenCalledWith({sessionDescription: LOCAL_DESCRIPTION, iceCandidates: [firstIceCandidate, secondIceCandidate, thirdIceCandidate]});
-                expect(failureCallback).not.toHaveBeenCalled();
-            });
-
-            it('makes the ICE candidates available via a getter', function() {
-                expect(peerConnection.getLocalIceCandidates()).toEqual([firstIceCandidate, secondIceCandidate, thirdIceCandidate]);
-            });
-        });
-
-        describe("when not completed", function() {
-
-            var gatheringStatusCallback;
-
-            beforeEach(function() {
-                runs(function() {
-                    rtcPeerConnection.iceGatheringState = "gathering";
-                    asyncExecService.setInterval.andCallFake(function (callback) {
-                        gatheringStatusCallback = callback;
-                    });
-                    peerConnection.waitForIceCandidates().then(successCallback).catch(failureCallback);
-                });
-
-                waits(10);
-
-                runs(function() {
-                    timingService.getCurrentTimeInMilliseconds.andReturn(CURRENT_TIME_MILLISECONDS + 1000);
-                    gatheringStatusCallback();
-                });
-
-                waits(10);
-            });
-
-            it("keeps waiting for candidates", function() {
-                expect(successCallback).not.toHaveBeenCalled();
-                expect(failureCallback).not.toHaveBeenCalled();
-            });
-        });
-
-        describe("when cancelled", function() {
-
-            beforeEach(function() {
-                runs(function () {
-                    peerConnection.waitForIceCandidates().then(successCallback).catch(failureCallback).cancel();
-                });
-
-                waits(100);
-            });
-
-            it("will clear the checking interval", function() {
-                expect(asyncExecService.clearInterval).toHaveBeenCalledWith(INTERVAL_ID);
-            });
-
-            it("will remove the onicecandidates listener", function() {
-                expect(rtcPeerConnection.onicecandidate).toBeNull();
-            });
-
-            it("will reject with a cancellation error", function() {
-                expect(successCallback).not.toHaveBeenCalled();
-                expect(failureCallback).toHaveBeenCalledWith(jasmine.any(Promise.CancellationError));
-            });
+            expect(iceCandidatesHandler).toHaveBeenCalledWith([firstIceCandidate]);
+            expect(iceCandidatesHandler).toHaveBeenCalledWith([secondIceCandidate]);
         });
     });
 
     describe("when creating an answer", function () {
 
-        it("will set the remote description and add the remote ICE candidates", function () {
+        it("will set the remote description", function () {
             runs(function () {
-                peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES).then(successCallback).catch(failureCallback);
+                peerConnection.createAnswer(REMOTE_DESCRIPTION).then(successCallback).catch(failureCallback);
             });
 
             waits(10);
 
             runs(function () {
                 expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION));
-                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[0]));
-                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[1]));
-                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[2]));
+                expect(rtcPeerConnection.createAnswer).toHaveBeenCalledWith(jasmine.any(Function), jasmine.any(Function), {
+                    mandatory: {
+                        OfferToReceiveAudio: false,
+                        OfferToReceiveVideo: false
+                    }
+                });
                 expect(successCallback).not.toHaveBeenCalled();
                 expect(failureCallback).not.toHaveBeenCalled();
             });
@@ -690,24 +539,19 @@ describe("The peer connection", function () {
                 peerConnection.createOffer().then(function () {
                 });
                 peerConnection.handleAnswer({
-                    sessionDescription: REMOTE_DESCRIPTION,
-                    iceCandidates: REMOTE_ICE_CANDIDATES
-                }).then(successCallback).catch(failureCallback);
+                    sessionDescription: REMOTE_DESCRIPTION
+                });
             });
 
             waits(10);
         });
 
-        it("sets the remote description and adds the ice candidates", function () {
-
+        it("sets the remote description", function () {
             expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION));
+        });
 
-            expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[0]));
-            expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[1]));
-            expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[2]));
-
-            expect(successCallback).toHaveBeenCalled();
-            expect(failureCallback).not.toHaveBeenCalled();
+        it("triggers processing of cached remote candidates", function() {
+            // TODO!!!
         });
     });
 

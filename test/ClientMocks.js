@@ -1,9 +1,7 @@
 "use strict";
 
-var ConsoleLogger = require("cyclon.p2p").ConsoleLogger;
-
 module.exports.mockLoggingService = function () {
-    return new ConsoleLogger();
+    return require("cyclon.p2p-common").consoleLogger();
 };
 
 module.exports.mockMessagingUtilities = function () {
@@ -11,7 +9,7 @@ module.exports.mockMessagingUtilities = function () {
 };
 
 module.exports.mockSignallingService = function () {
-    return jasmine.createSpyObj('signallingService', ['initialize', 'getSignallingInfo', 'sendOffer', 'sendAnswer', 'on', 'removeListener', 'waitForAnswer']);
+    return jasmine.createSpyObj('signallingService', ['connect', 'getSignallingInfo', 'sendOffer', 'sendAnswer', 'on', 'removeListener', 'waitForAnswer', 'removeAllListeners', 'createNewPointer']);
 };
 
 module.exports.mockCyclonNode = function () {
@@ -23,7 +21,7 @@ module.exports.mockAsyncExecService = function () {
 };
 
 module.exports.mockPeerConnection = function (name) {
-    return jasmine.createSpyObj(name || 'peerConnection', ['createOffer', 'createAnswer', 'waitForChannelEstablishment', 'waitForChannelToOpen', 'handleAnswer', 'close', 'waitForIceCandidates', 'cancel', 'getLocalDescription', 'getLocalIceCandidates']);
+    return jasmine.createSpyObj(name || 'peerConnection', ['createOffer', 'createAnswer', 'waitForChannelEstablishment', 'waitForChannelToOpen', 'handleAnswer', 'close', 'waitForIceCandidates', 'cancel', 'getLocalDescription', 'getLocalIceCandidates', 'removeAllListeners']);
 };
 
 module.exports.mockTimingService = function () {
@@ -35,12 +33,12 @@ module.exports.mockRtcObjectFactory = function () {
 };
 
 module.exports.mockSignallingSocket = function () {
-    return jasmine.createSpyObj('signallingSocket', ['getCurrentServerSpecs', 'initialize', 'on']);
+    return jasmine.createSpyObj('signallingSocket', ['getCurrentServerSpecs', 'connect', 'on']);
 };
 
 module.exports.mockSocketFactory = function() {
     return jasmine.createSpyObj('mockSocketFactory', ['createSocket']);
-}
+};
 
 module.exports.mockHttpRequestService = function () {
     return jasmine.createSpyObj('httpRequestService', ['get', 'post']);
