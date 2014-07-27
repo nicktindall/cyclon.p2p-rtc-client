@@ -94,6 +94,23 @@ describe("The socket.io signalling service", function () {
             var pointer = signallingService.createNewPointer();
             expect(pointer.signalling).toBe(SERVER_SPECS);
         });
+
+        it("should populate the metadata from the providers", function() {
+            var metadataProviders = {
+                one: function() {
+                    return "oneValue";
+                },
+                two: function() {
+                    return "twoValue";
+                }
+            };
+            signallingService.connect(metadataProviders);
+
+            expect(signallingService.createNewPointer().metadata).toEqual({
+                one: "oneValue",
+                two: "twoValue"
+            });
+        });
     });
 
     describe("when sending messages", function () {
@@ -121,7 +138,7 @@ describe("The socket.io signalling service", function () {
                         age: 0,
                         seq: 0,
                         signalling: LOCAL_SERVER_SPECS,
-                        metaData: {}
+                        metadata: {}
                     },
                     destinationId: DESTINATION_NODE.id,
                     sessionDescription: SESSION_DESCRIPTION
