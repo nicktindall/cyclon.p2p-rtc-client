@@ -92,6 +92,15 @@ describe('The RedundantSignallingSocket', function() {
 				expect(socketRegistered).toBe(true);
 			});
 
+            it('will send a join message when a socket connects', function() {
+                var roomsJoined = false;
+                connectedSockets[0].on("join", function() {
+                    roomsJoined = true;
+                });
+                connectedSockets[0].emit("connect");
+                expect(roomsJoined).toBe(true);
+            });
+
 			it('will propagate answer events from the sockets', function() {
 				var answerEvent = null;
 				var ANSWER_EVENT = "ANSWER_EVENT";

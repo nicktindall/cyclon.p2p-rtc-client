@@ -33,6 +33,8 @@ describe("The socket.io signalling service", function () {
     var TYPE = "TYPE";
     var CORRELATION_ID = "CORRELATION_ID";
     var LOCAL_SERVER_SPECS = [{signallingApiBase: "http://signalling.api/base"}];
+    var METADATA_PROVIDERS = [function() {}, function() {}];
+    var ROOMS = ["room", "otherRoom"];
 
     beforeEach(function () {
         successCallback = ClientMocks.createSuccessCallback();
@@ -78,11 +80,11 @@ describe("The socket.io signalling service", function () {
     describe("when connecting", function () {
 
         beforeEach(function() {
-            signallingService.connect();
+            signallingService.connect(METADATA_PROVIDERS, ROOMS);
         });
 
         it("should call connect on the underlying signalling socket", function () {
-            expect(signallingSocket.connect).toHaveBeenCalledWith(signallingService);
+            expect(signallingSocket.connect).toHaveBeenCalledWith(signallingService, ROOMS);
         });
     });
 
