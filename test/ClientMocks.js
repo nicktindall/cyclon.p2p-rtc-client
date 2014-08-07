@@ -4,16 +4,8 @@ module.exports.mockLoggingService = function () {
     return require("cyclon.p2p-common").consoleLogger();
 };
 
-module.exports.mockMessagingUtilities = function () {
-    return jasmine.createSpyObj('messagingUtilities', ['waitForChannelMessage']);
-};
-
 module.exports.mockSignallingService = function () {
     return jasmine.createSpyObj('signallingService', ['connect', 'getSignallingInfo', 'sendOffer', 'sendAnswer', 'on', 'removeListener', 'waitForAnswer', 'removeAllListeners', 'createNewPointer']);
-};
-
-module.exports.mockCyclonNode = function () {
-    return jasmine.createSpyObj('cyclonNode', ['getId', 'start', 'executeShuffle', 'createNewPointer', 'handleShuffleRequest', 'handleShuffleResponse', 'emit']);
 };
 
 module.exports.mockAsyncExecService = function () {

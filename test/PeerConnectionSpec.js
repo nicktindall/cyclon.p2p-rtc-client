@@ -11,7 +11,6 @@ describe("The peer connection", function () {
     var REMOTE_ICE_CANDIDATES = ["a", "b", "c"];
     var TIMEOUT_ID = "TIMEOUT_ID";
     var INTERVAL_ID = "INTERVAL_ID";
-    var CURRENT_TIME_MILLISECONDS = new Date().getTime();
     var REMOTE_DESCRIPTION_PREFIX = "RD_";
     var REMOTE_CANDIDATE_PREFIX = "RC_";
 
@@ -27,7 +26,6 @@ describe("The peer connection", function () {
         rtcPeerConnection,
         asyncExecService,
         rtcDataChannel,
-        timingService,
         rtcObjectFactory,
         loggingService;
 
@@ -38,7 +36,6 @@ describe("The peer connection", function () {
         failureCallback = ClientMocks.createFailureCallback();
 
         asyncExecService = ClientMocks.mockAsyncExecService();
-        timingService = ClientMocks.mockTimingService();
         rtcObjectFactory = ClientMocks.mockRtcObjectFactory();
         rtcPeerConnection = ClientMocks.mockRtcPeerConnection();
         rtcPeerConnection.localDescription = LOCAL_DESCRIPTION; // Does this really exist?
@@ -49,7 +46,6 @@ describe("The peer connection", function () {
         // Mock behaviour
         //
         rtcPeerConnection.createDataChannel.andReturn(rtcDataChannel);
-        timingService.getCurrentTimeInMilliseconds.andReturn(CURRENT_TIME_MILLISECONDS);
         rtcObjectFactory.createRTCSessionDescription.andCallFake(function (sessionDescriptionString) {
             return remoteDescriptionFor(sessionDescriptionString);
         });
@@ -59,7 +55,7 @@ describe("The peer connection", function () {
         asyncExecService.setTimeout.andReturn(TIMEOUT_ID);
         asyncExecService.setInterval.andReturn(INTERVAL_ID);
 
-        peerConnection = new PeerConnection(rtcPeerConnection, asyncExecService, timingService, rtcObjectFactory, loggingService);
+        peerConnection = new PeerConnection(rtcPeerConnection, asyncExecService, rtcObjectFactory, loggingService);
     });
 
     describe("when creating an offer", function () {
