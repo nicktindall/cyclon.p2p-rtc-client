@@ -40,24 +40,8 @@ module.exports.mockPeerConnectionFactory = function () {
     return jasmine.createSpyObj('peerConnectionFactory', ['createPeerConnection']);
 };
 
-module.exports.mockShuffleStateFactory = function () {
-    return jasmine.createSpyObj('shuffleStateFactory', ['createOutgoingShuffleState', 'createIncomingShuffleState']);
-};
-
-module.exports.mockOutgoingShuffleState = function (name) {
-    return jasmine.createSpyObj(name || 'outgoingShuffleState', ['sendOffer', 'sendShuffleRequest', 'processShuffleResponse', 'getDestinationId', 'sendResponseAcknowledgement', 'close', 'handleAnswer', 'waitForAnswer', 'cancel']);
-};
-
-module.exports.mockIncomingShuffleState = function () {
-    return jasmine.createSpyObj('incomingShuffleState', ['sendAnswer', 'processShuffleRequest', 'close', 'cancel', 'waitForResponseAcknowledgement']);
-};
-
 module.exports.mockNeighbourSet = function () {
     return jasmine.createSpyObj('neighbourSet', ['contains', 'insert', 'remove', 'get', 'size', 'selectShuffleSet', 'findOldestId', 'randomSelection', 'incrementAges', 'resetAge', 'mergeNodePointerIfNewer']);
-};
-
-module.exports.mockComms = function () {
-    return jasmine.createSpyObj('comms', ['sendShuffleRequest', 'sendShuffleResponse', 'getPointerData']);
 };
 
 module.exports.mockStorage = function() {
