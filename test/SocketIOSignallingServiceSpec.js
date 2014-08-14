@@ -18,6 +18,7 @@ describe("The socket.io signalling service", function () {
         capFailure,
         storage;
 
+    var STORED_ID_STORAGE_KEY = "cyclon-rtc-local-node-id";
     var LOCAL_ID = "LOCAL_ID";
     var REMOTE_ID = "REMOTE_ID";
     var SIGNALLING_BASE = "http://signalling-base.com/path/to/";
@@ -46,7 +47,7 @@ describe("The socket.io signalling service", function () {
         storage = ClientMocks.mockStorage();
 
         storage.getItem.andCallFake(function(itemId) {
-            if(itemId == "cyclon-rtc-local-node-id") {
+            if(itemId === STORED_ID_STORAGE_KEY) {
                 return LOCAL_ID;
             }
             return null;
@@ -362,6 +363,53 @@ describe("The socket.io signalling service", function () {
             signallingSocket.emit("candidates", message);
 
             expect(candidatesHandler).toHaveBeenCalledWith(message);
+        });
+    });
+
+    describe("when getting the local ID", function() {
+
+        describe("and it has been previously generated and stored", function() {
+
+            it("returns the stored ID", function() {
+                storage.getItem.andReturn("STORED_KEY");
+                expect(signallingService.getLocalId()).toBe("STORED_KEY");
+            });
+        });
+
+        describe("and no key has been previously generated", function() {
+
+            it("generates a new ID", function() {
+                storage.getItem.andReturn(null);
+                expect(signallingService.getLocalId()).toMatch(/^[\da-f]{8}\-[\da-f]{4}\-4[\da-f]{3}\-[\da-f]{4}\-[\da-f]{12}$/);
+            });
+        });
+    });
+
+    describe("when sending ICE candidates", function() {
+        beforeEach(function () {
+            signallingService.connect();
+        });
+
+        it("should emit a correctly structured ICE candidate message", function () {
+
+            runs(function() {
+                signallingService.sendIceCandidates(DESTINATION_NODE, CORRELATION_ID, ICE_CANDIDATES)
+                    .then(successCallback).catch(failureCallback);
+            });
+
+            waits(10);
+
+            runs(function() {
+                expect(httpRequestService.post).toHaveBeenCalledWith(SIGNALLING_BASE + "api/candidates", {
+                    sourceId: LOCAL_ID,
+                    correlationId: CORRELATION_ID,
+                    destinationId: DESTINATION_NODE.id,
+                    iceCandidates: ICE_CANDIDATES
+                });
+
+                expect(successCallback).toHaveBeenCalled();
+                expect(failureCallback).not.toHaveBeenCalled();
+            });
         });
     });
 });

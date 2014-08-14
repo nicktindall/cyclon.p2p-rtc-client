@@ -5,7 +5,7 @@ module.exports.mockLoggingService = function () {
 };
 
 module.exports.mockSignallingService = function () {
-    return jasmine.createSpyObj('signallingService', ['connect', 'getSignallingInfo', 'sendOffer', 'sendAnswer', 'on', 'removeListener', 'waitForAnswer', 'removeAllListeners', 'createNewPointer']);
+    return jasmine.createSpyObj('signallingService', ['connect', 'getLocalId', 'sendOffer', 'sendAnswer', 'on', 'removeListener', 'waitForAnswer', 'removeAllListeners', 'createNewPointer', 'sendIceCandidates']);
 };
 
 module.exports.mockAsyncExecService = function () {
