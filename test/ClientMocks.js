@@ -21,7 +21,7 @@ module.exports.mockTimingService = function () {
 };
 
 module.exports.mockRtcObjectFactory = function () {
-    return jasmine.createSpyObj('rtcObjectFactory', ['createRTCSessionDescription', 'createRTCIceCandidate']);
+    return jasmine.createSpyObj('rtcObjectFactory', ['createRTCSessionDescription', 'createRTCIceCandidate', 'createRTCPeerConnection', 'createIceServers']);
 };
 
 module.exports.mockSignallingSocket = function () {
