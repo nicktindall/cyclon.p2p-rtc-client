@@ -24,17 +24,23 @@ describe("The socket.io signalling service", function () {
     var SIGNALLING_BASE = "http://signalling-base.com/path/to/";
     var DESTINATION_NODE = {
         id: REMOTE_ID,
-        signalling: [{
-            signallingApiBase: SIGNALLING_BASE
-        }]
+        signalling: [
+            {
+                signallingApiBase: SIGNALLING_BASE
+            }
+        ]
     };
     var SESSION_DESCRIPTION = "SESSION_DESCRIPTION";
     var ICE_CANDIDATES = ["a", "b", "c"];
     var NODE_POINTER = "NODE_POINTER";
     var TYPE = "TYPE";
     var CORRELATION_ID = "CORRELATION_ID";
-    var LOCAL_SERVER_SPECS = [{signallingApiBase: "http://signalling.api/base"}];
-    var METADATA_PROVIDERS = [function() {}, function() {}];
+    var LOCAL_SERVER_SPECS = [
+        {signallingApiBase: "http://signalling.api/base"}
+    ];
+    var METADATA_PROVIDERS = [function () {
+    }, function () {
+    }];
     var ROOMS = ["room", "otherRoom"];
 
     beforeEach(function () {
@@ -46,17 +52,17 @@ describe("The socket.io signalling service", function () {
         httpRequestService = ClientMocks.mockHttpRequestService();
         storage = ClientMocks.mockStorage();
 
-        storage.getItem.andCallFake(function(itemId) {
-            if(itemId === STORED_ID_STORAGE_KEY) {
+        storage.getItem.and.callFake(function (itemId) {
+            if (itemId === STORED_ID_STORAGE_KEY) {
                 return LOCAL_ID;
             }
             return null;
         });
 
-        signallingSocket.getCurrentServerSpecs.andReturn(LOCAL_SERVER_SPECS);
+        signallingSocket.getCurrentServerSpecs.and.returnValue(LOCAL_SERVER_SPECS);
 
         // Capture success/failure callbacks when post is called
-        httpRequestService.post.andCallFake(function() {
+        httpRequestService.post.and.callFake(function () {
             return Promise.resolve({});
         });
         capSuccess = capFailure = null;
@@ -64,7 +70,7 @@ describe("The socket.io signalling service", function () {
         signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
     });
 
-    describe("in construction", function() {
+    describe("in construction", function () {
         it("should add a listener to propagate 'answer' events", function () {
             expect(signallingSocket.on).toHaveBeenCalledWith("answer", jasmine.any(Function));
         });
@@ -80,7 +86,7 @@ describe("The socket.io signalling service", function () {
 
     describe("when connecting", function () {
 
-        beforeEach(function() {
+        beforeEach(function () {
             signallingService.connect(METADATA_PROVIDERS, ROOMS);
         });
 
@@ -89,21 +95,21 @@ describe("The socket.io signalling service", function () {
         });
     });
 
-    describe("when creating a new pointer", function() {
+    describe("when creating a new pointer", function () {
 
-        it("should delegate to the signalling socket for signalling data", function() {
+        it("should delegate to the signalling socket for signalling data", function () {
             var SERVER_SPECS = "SERVER_SPECS";
-            signallingSocket.getCurrentServerSpecs.andReturn(SERVER_SPECS);
+            signallingSocket.getCurrentServerSpecs.and.returnValue(SERVER_SPECS);
             var pointer = signallingService.createNewPointer();
             expect(pointer.signalling).toBe(SERVER_SPECS);
         });
 
-        it("should populate the metadata from the providers", function() {
+        it("should populate the metadata from the providers", function () {
             var metadataProviders = {
-                one: function() {
+                one: function () {
                     return "oneValue";
                 },
-                two: function() {
+                two: function () {
                     return "twoValue";
                 }
             };
@@ -122,107 +128,68 @@ describe("The socket.io signalling service", function () {
             signallingService.connect();
         });
 
-        it("should emit a correctly structured offer message and return the correlation ID", function () {
+        it("should emit a correctly structured offer message and return the correlation ID", function (done) {
 
-            runs(function() {
-                signallingService.sendOffer(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION)
-                    .then(successCallback).catch(failureCallback);
-            });
+            signallingService.sendOffer(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION)
+                .then(function (result) {
+                    expect(httpRequestService.post).toHaveBeenCalledWith(SIGNALLING_BASE + "api/offer", {
+                        channelType: TYPE,
+                        sourceId: LOCAL_ID,
+                        correlationId: 0,
+                        sourcePointer: {
+                            id: LOCAL_ID,
+                            age: 0,
+                            seq: 0,
+                            signalling: LOCAL_SERVER_SPECS,
+                            metadata: {}
+                        },
+                        destinationId: DESTINATION_NODE.id,
+                        sessionDescription: SESSION_DESCRIPTION
+                    });
 
-            waits(10);
-
-            runs(function() {
-                expect(httpRequestService.post).toHaveBeenCalledWith(SIGNALLING_BASE + "api/offer", {
-                    channelType: TYPE,
-                    sourceId: LOCAL_ID,
-                    correlationId: 0,
-                    sourcePointer: {
-                        id: LOCAL_ID,
-                        age: 0,
-                        seq: 0,
-                        signalling: LOCAL_SERVER_SPECS,
-                        metadata: {}
-                    },
-                    destinationId: DESTINATION_NODE.id,
-                    sessionDescription: SESSION_DESCRIPTION
+                    expect(result).toBe(0);
+                    done();
                 });
-
-                expect(successCallback).toHaveBeenCalledWith(0);
-                expect(failureCallback).not.toHaveBeenCalled();
-            });
         });
 
-        it("should emit a correctly structured answer message", function () {
+        it("should emit a correctly structured answer message", function (done) {
 
-            runs(function() {
-                signallingService.sendAnswer(DESTINATION_NODE, CORRELATION_ID, SESSION_DESCRIPTION)
-                    .then(successCallback).catch(failureCallback);
-            });
-
-            waits(10);
-
-            runs(function() {
-                expect(httpRequestService.post).toHaveBeenCalledWith(SIGNALLING_BASE + "api/answer", {
-                    sourceId: LOCAL_ID,
-                    correlationId: CORRELATION_ID,
-                    destinationId: DESTINATION_NODE.id,
-                    sessionDescription: SESSION_DESCRIPTION
+            signallingService.sendAnswer(DESTINATION_NODE, CORRELATION_ID, SESSION_DESCRIPTION)
+                .then(function () {
+                    expect(httpRequestService.post).toHaveBeenCalledWith(SIGNALLING_BASE + "api/answer", {
+                        sourceId: LOCAL_ID,
+                        correlationId: CORRELATION_ID,
+                        destinationId: DESTINATION_NODE.id,
+                        sessionDescription: SESSION_DESCRIPTION
+                    });
+                    done();
                 });
-
-                expect(successCallback).toHaveBeenCalled();
-                expect(failureCallback).not.toHaveBeenCalled();
-            });
         });
 
-        it("should throw an UnreachableError when the peer has no signalling servers specified", function() {
+        it("should throw an UnreachableError when the peer has no signalling servers specified", function (done) {
 
-            var errorIsInstanceOfUnreachableError = false;
             var destinationNodeWithNoSignallingServers = {
                 id: "DESTINATION_ID",
                 signalling: []
             };
 
-            runs(function() {
-                signallingService.sendAnswer(destinationNodeWithNoSignallingServers, SESSION_DESCRIPTION)
-                    .then(successCallback)
-                    .catch(function(error) {
-                        errorIsInstanceOfUnreachableError = error instanceof UnreachableError;
-                    });
-            });
-
-            waits(10);
-
-            runs(function() {
-                expect(errorIsInstanceOfUnreachableError).toBeTruthy();
-                expect(successCallback).not.toHaveBeenCalled();
-            })
+            signallingService.sendAnswer(destinationNodeWithNoSignallingServers, SESSION_DESCRIPTION)
+                .catch(UnreachableError, done);
         });
 
-        it("should throw an UnreachableError when the peer is no longer connected to any of its signalling servers", function() {
+        it("should throw an UnreachableError when the peer is no longer connected to any of its signalling servers", function (done) {
 
-            httpRequestService.post.andReturn(Promise.reject(new Error("404 received")));
-            var errorIsInstanceOfUnreachableError = false;
+            httpRequestService.post.and.returnValue(Promise.reject(new Error("404 received")));
 
-            runs(function() {
-                signallingService.sendAnswer(DESTINATION_NODE, SESSION_DESCRIPTION, ICE_CANDIDATES)
-                    .then(successCallback)
-                    .catch(function(error) {
-                        errorIsInstanceOfUnreachableError = error instanceof UnreachableError;
-                    });
-            });
-
-            waits(10);
-
-            runs(function() {
-                expect(errorIsInstanceOfUnreachableError).toBeTruthy();
-                expect(successCallback).not.toHaveBeenCalled();
-            })
+            signallingService.sendAnswer(DESTINATION_NODE, SESSION_DESCRIPTION, ICE_CANDIDATES)
+                .then(successCallback)
+                .catch(UnreachableError, done);
         });
     });
 
-    describe("when waiting for an answer", function() {
+    describe("when waiting for an answer", function () {
 
-        beforeEach(function() {
+        beforeEach(function () {
             signallingSocket = new events.EventEmitter();
             signallingSocket.connect = jasmine.createSpy('connect');
 
@@ -230,90 +197,67 @@ describe("The socket.io signalling service", function () {
             signallingService.connect();
         });
 
-        it("resolves with the answer message when the correlated answer arrives", function() {
+        it("resolves with the answer message when the correlated answer arrives", function () {
 
             var message = {
                 sourceId: REMOTE_ID,
                 correlationId: CORRELATION_ID
             };
 
-            runs(function() {
-                signallingService.waitForAnswer(CORRELATION_ID).then(successCallback).catch(failureCallback);
-                signallingSocket.emit("answer", message);
+            signallingService.waitForAnswer(CORRELATION_ID).then(function (result) {
+                expect(result).toBe(message);
             });
 
-            waits(10);
-
-            runs(function() {
-                expect(successCallback).toHaveBeenCalledWith(message);
-                expect(failureCallback).not.toHaveBeenCalled();
-            });
+            signallingSocket.emit("answer", message);
         });
 
-        it("ignores non-correlated answers", function() {
+        it("ignores non-correlated answers", function (done) {
 
             var message = {
                 sourceId: REMOTE_ID,
-                correlationId: "OTHER_"+CORRELATION_ID
+                correlationId: "OTHER_" + CORRELATION_ID
             };
 
-            runs(function() {
-                signallingService.waitForAnswer(CORRELATION_ID).then(successCallback).catch(failureCallback);
-                signallingSocket.emit("answer", message);
-            });
+            signallingService.waitForAnswer(CORRELATION_ID).then(successCallback).catch(failureCallback);
+            signallingSocket.emit("answer", message);
 
-            waits(10);
-
-            runs(function() {
+            setTimeout(function () {
                 expect(successCallback).not.toHaveBeenCalled();
                 expect(failureCallback).not.toHaveBeenCalled();
-            });
+                done();
+            }, 10);
         });
 
-        describe("and cancel is called", function() {
+        describe("and cancel is called", function () {
 
-            beforeEach(function() {
-
-                runs(function() {
-                    signallingService.waitForAnswer(CORRELATION_ID)
-                        .then(successCallback)
-                        .catch(Promise.CancellationError, failureCallback)
-                        .cancel();
-                });
-
-                waits(10);
+            beforeEach(function (done) {
+                signallingService.waitForAnswer(CORRELATION_ID)
+                    .then(successCallback)
+                    .catch(Promise.CancellationError, done)
+                    .cancel();
             });
 
-            it("rejects with a cancellation error", function() {
-                expect(successCallback).not.toHaveBeenCalled();
-                expect(failureCallback).toHaveBeenCalled();
-            });
-
-            it("stops listening for the answer message", function() {
+            it("stops listening for the answer message", function () {
 
                 var message = {
                     sourceId: REMOTE_ID,
                     correlationId: CORRELATION_ID
                 };
 
-                runs(function() {
-                    signallingSocket.emit("answer", message);
-                });
+                signallingSocket.emit("answer", message);
 
-                waits(10);
-
-                runs(function() {
+                setTimeout(function () {
                     expect(successCallback).not.toHaveBeenCalled();
-                });
+                }, 10);
             });
         });
     });
 
-    describe("when an offer is received", function() {
+    describe("when an offer is received", function () {
 
         var offerHandler;
 
-        beforeEach(function() {
+        beforeEach(function () {
             offerHandler = jasmine.createSpy('offerHandler');
 
             signallingSocket = new events.EventEmitter();
@@ -323,8 +267,8 @@ describe("The socket.io signalling service", function () {
             signallingService.connect();
         });
 
-        it("emits an offer event with the message", function() {
-        
+        it("emits an offer event with the message", function () {
+
             var message = {
                 sourceId: REMOTE_ID,
                 correlationId: CORRELATION_ID
@@ -337,11 +281,11 @@ describe("The socket.io signalling service", function () {
         });
     });
 
-    describe("when ICE candidates are received", function() {
+    describe("when ICE candidates are received", function () {
 
         var candidatesHandler;
 
-        beforeEach(function() {
+        beforeEach(function () {
             candidatesHandler = jasmine.createSpy('candidatesHandler');
 
             signallingSocket = new events.EventEmitter();
@@ -351,12 +295,15 @@ describe("The socket.io signalling service", function () {
             signallingService.connect();
         });
 
-        it("emits an candidates event with the message", function() {
+        it("emits an candidates event with the message", function () {
 
             var message = {
                 sourceId: REMOTE_ID,
                 correlationId: 1,
-                iceCandidates: [{signallingApiBase: "aaa"}, {signallingApiBase: "bbb"}]
+                iceCandidates: [
+                    {signallingApiBase: "aaa"},
+                    {signallingApiBase: "bbb"}
+                ]
             };
 
             signallingService.on("candidates-" + REMOTE_ID + "-1", candidatesHandler);
@@ -366,49 +313,41 @@ describe("The socket.io signalling service", function () {
         });
     });
 
-    describe("when getting the local ID", function() {
+    describe("when getting the local ID", function () {
 
-        describe("and it has been previously generated and stored", function() {
+        describe("and it has been previously generated and stored", function () {
 
-            it("returns the stored ID", function() {
-                storage.getItem.andReturn("STORED_KEY");
+            it("returns the stored ID", function () {
+                storage.getItem.and.returnValue("STORED_KEY");
                 expect(signallingService.getLocalId()).toBe("STORED_KEY");
             });
         });
 
-        describe("and no key has been previously generated", function() {
+        describe("and no key has been previously generated", function () {
 
-            it("generates a new ID", function() {
-                storage.getItem.andReturn(null);
+            it("generates a new ID", function () {
+                storage.getItem.and.returnValue(null);
                 expect(signallingService.getLocalId()).toMatch(/^[\da-f]{8}\-[\da-f]{4}\-4[\da-f]{3}\-[\da-f]{4}\-[\da-f]{12}$/);
             });
         });
     });
 
-    describe("when sending ICE candidates", function() {
+    describe("when sending ICE candidates", function () {
         beforeEach(function () {
             signallingService.connect();
         });
 
-        it("should emit a correctly structured ICE candidate message", function () {
+        it("should emit a correctly structured ICE candidate message", function (done) {
 
-            runs(function() {
-                signallingService.sendIceCandidates(DESTINATION_NODE, CORRELATION_ID, ICE_CANDIDATES)
-                    .then(successCallback).catch(failureCallback);
-            });
+            signallingService.sendIceCandidates(DESTINATION_NODE, CORRELATION_ID, ICE_CANDIDATES).then(function () {
 
-            waits(10);
-
-            runs(function() {
                 expect(httpRequestService.post).toHaveBeenCalledWith(SIGNALLING_BASE + "api/candidates", {
                     sourceId: LOCAL_ID,
                     correlationId: CORRELATION_ID,
                     destinationId: DESTINATION_NODE.id,
                     iceCandidates: ICE_CANDIDATES
                 });
-
-                expect(successCallback).toHaveBeenCalled();
-                expect(failureCallback).not.toHaveBeenCalled();
+                done();
             });
         });
     });

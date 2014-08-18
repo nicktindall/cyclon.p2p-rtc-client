@@ -30,11 +30,11 @@
   },
   "devDependencies": {
     "istanbul": "0.3.x",
-    "jasmine-node": "1.14.2"
+    "jasmine-node": "2.0.x"
   },
   "dependencies": {
-    "cyclon.p2p-common": "0.0.2",
+    "cyclon.p2p-common": "0.0.3",
     "socket.io-client": "1.0.x",
-    "bluebird": "2.1.x"
+    "bluebird": "2.3.x"
   }
 }

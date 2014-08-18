@@ -71,16 +71,16 @@ module.exports.createSuccessCallback = function () {
 };
 
 module.exports.createFailureCallback = function () {
-    return jasmine.createSpy('failureCallback').andCallFake(function (error) {
+    return jasmine.createSpy('failureCallback').and.callFake(function (error) {
         //console.error("Error occurred!", error);
     });
 };
 
 module.exports.mockPromise = function(name) {
     var mockPromise = jasmine.createSpyObj(name || 'mockPromise', ['isPending', 'close', 'cancel', 'then', 'catch', 'cancellable']);
-    mockPromise.then.andReturn(mockPromise);
-    mockPromise.cancellable.andReturn(mockPromise);
-    mockPromise.catch.andReturn(mockPromise);
+    mockPromise.then.and.returnValue(mockPromise);
+    mockPromise.cancellable.and.returnValue(mockPromise);
+    mockPromise.catch.and.returnValue(mockPromise);
     return mockPromise;
 };
 

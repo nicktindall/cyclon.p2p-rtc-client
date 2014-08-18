@@ -48,7 +48,7 @@ describe('The RedundantSignallingSocket', function() {
 
 		redundantSignallingSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, storage, timingService);
 
-		socketFactory.createSocket.andCallFake(function(signallingSpec) {
+		socketFactory.createSocket.and.callFake(function(signallingSpec) {
 			connectedServerSpecs.push(signallingSpec);
 			var newSocket = new events.EventEmitter();
 			newSocket.io = new events.EventEmitter();
@@ -58,14 +58,14 @@ describe('The RedundantSignallingSocket', function() {
 		});
 
 		// static signalling socket preferring 2 of 4 total signalling servers
-		signallingServerService.getSignallingServerSpecs.andReturn([SIGNALLING_SPEC_1, SIGNALLING_SPEC_2, SIGNALLING_SPEC_3, SIGNALLING_SPEC_4]);
-		signallingServerService.getPreferredNumberOfSockets.andReturn(2);
+		signallingServerService.getSignallingServerSpecs.and.returnValue([SIGNALLING_SPEC_1, SIGNALLING_SPEC_2, SIGNALLING_SPEC_3, SIGNALLING_SPEC_4]);
+		signallingServerService.getPreferredNumberOfSockets.and.returnValue(2);
 
-		asyncExecService.setInterval.andCallFake(function(callback) {
+		asyncExecService.setInterval.and.callFake(function(callback) {
 			connectivityCheckCallback = callback;
 		});
 
-		timingService.getCurrentTimeInMilliseconds.andReturn(currentTime);
+		timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime);
 	});
 
 	describe('when connecting to initial server set', function() {
@@ -179,11 +179,11 @@ describe('The RedundantSignallingSocket', function() {
 			connectedSockets[0].emit("disconnect");
 
 			// A minute later...
-			timingService.getCurrentTimeInMilliseconds.andReturn(currentTime + ONE_MINUTE);
+			timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime + ONE_MINUTE);
 			connectedSockets[1].emit("disconnect");
 
 			// Another minute later...
-			timingService.getCurrentTimeInMilliseconds.andReturn(currentTime + 2*ONE_MINUTE);
+			timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime + 2*ONE_MINUTE);
 			connectedSockets[2].emit("disconnect");
 
 			expect(connectedServerSpecs[4]).toEqual(connectedServerSpecs[0]);
@@ -211,7 +211,7 @@ describe('The RedundantSignallingSocket', function() {
 
 			expect(connectedServerSpecs.length).toEqual(4);
 
-			timingService.getCurrentTimeInMilliseconds.andReturn(currentTime + 2 * ONE_MINUTE);
+			timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime + 2 * ONE_MINUTE);
 			connectivityCheckCallback();
 
 			expect(connectedServerSpecs.length).toEqual(5);

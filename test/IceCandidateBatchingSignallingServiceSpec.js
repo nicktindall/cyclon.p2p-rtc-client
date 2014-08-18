@@ -31,12 +31,12 @@ describe("The ICE candidate batching signalling service decorator", function() {
         wrappedService = ClientMocks.mockSignallingService();
         sendIceCandidatesResponse = Promise.resolve({});
 
-        wrappedService.sendOffer.andReturn(SEND_OFFER_RESULT);
-        wrappedService.waitForAnswer.andReturn(WAIT_FOR_ANSWER_RESULT);
-        wrappedService.createNewPointer.andReturn(CREATE_NEW_POINTER_RESULT);
-        wrappedService.getLocalId.andReturn(GET_LOCAL_ID_RESULT);
-        wrappedService.sendAnswer.andReturn(SEND_ANSWER_RESULT);
-        wrappedService.sendIceCandidates.andReturn(sendIceCandidatesResponse);
+        wrappedService.sendOffer.and.returnValue(SEND_OFFER_RESULT);
+        wrappedService.waitForAnswer.and.returnValue(WAIT_FOR_ANSWER_RESULT);
+        wrappedService.createNewPointer.and.returnValue(CREATE_NEW_POINTER_RESULT);
+        wrappedService.getLocalId.and.returnValue(GET_LOCAL_ID_RESULT);
+        wrappedService.sendAnswer.and.returnValue(SEND_ANSWER_RESULT);
+        wrappedService.sendIceCandidates.and.returnValue(sendIceCandidatesResponse);
 
         batchingService = new IceCandidateBatchingSignallingService(asyncExecService, wrappedService, BATCHING_DELAY_MS);
     });
@@ -104,9 +104,9 @@ describe("The ICE candidate batching signalling service decorator", function() {
 
             it("sends all candidates received since the queueing started", function() {
                 batchingService.sendIceCandidates(DESTINATION_NODE, CORRELATION_ID, ["one", "two"]);
-                var firstSendFunction = asyncExecService.setTimeout.mostRecentCall.args[0];
+                var firstSendFunction = asyncExecService.setTimeout.calls.mostRecent().args[0];
                 batchingService.sendIceCandidates(DESTINATION_NODE, "other_" + CORRELATION_ID, ["other_one", "other_two"]);
-                var secondSendFunction = asyncExecService.setTimeout.mostRecentCall.args[0];
+                var secondSendFunction = asyncExecService.setTimeout.calls.mostRecent().args[0];
                 batchingService.sendIceCandidates(DESTINATION_NODE, CORRELATION_ID, ["three"]);
 
                 expect(wrappedService.sendIceCandidates).not.toHaveBeenCalled();
@@ -114,7 +114,7 @@ describe("The ICE candidate batching signalling service decorator", function() {
                 expect(wrappedService.sendIceCandidates).toHaveBeenCalledWith(DESTINATION_NODE, CORRELATION_ID, ["one", "two", "three"]);
 
                 // reset the mock
-                wrappedService.sendIceCandidates.reset();
+                wrappedService.sendIceCandidates.calls.reset();
                 secondSendFunction();
                 expect(wrappedService.sendIceCandidates).toHaveBeenCalledWith(DESTINATION_NODE, "other_"+CORRELATION_ID, ["other_one", "other_two"]);
             });

@@ -28,7 +28,7 @@ describe("The PeerConnectionFactory", function() {
         rtcObjectFactory = ClientMocks.mockRtcObjectFactory();
         logger = ClientMocks.mockLoggingService();
 
-        rtcObjectFactory.createRTCPeerConnection.andReturn(ClientMocks.mockRtcPeerConnection());
+        rtcObjectFactory.createRTCPeerConnection.and.returnValue(ClientMocks.mockRtcPeerConnection());
     });
 
     describe("when creating a new peer connection", function() {
@@ -43,7 +43,7 @@ describe("The PeerConnectionFactory", function() {
                 var firstCreateIceServerResponse = ["server11", "server12"];
                 var secondCreateIceServerResponse = ["server2"];
                 var sequence = 0;
-                rtcObjectFactory.createIceServers.andCallFake(function() {
+                rtcObjectFactory.createIceServers.and.callFake(function() {
                     return [firstCreateIceServerResponse, secondCreateIceServerResponse][sequence++];
                 });
 
@@ -65,7 +65,7 @@ describe("The PeerConnectionFactory", function() {
             it("generates a peerConnectionConfig with the unsupported iceServers omitted", function() {
                 var secondCreateIceServerResponse = ["server2"];
                 var sequence = 0;
-                rtcObjectFactory.createIceServers.andCallFake(function() {
+                rtcObjectFactory.createIceServers.and.callFake(function() {
                     return [null, secondCreateIceServerResponse][sequence++];
                 });
                 peerConnectionFactory.createPeerConnection();

@@ -36,8 +36,8 @@ describe("The Channel", function() {
 		logger = ClientMocks.mockLoggingService();
 		channel = new Channel(asyncExecService, REMOTE_PEER, CORRELATION_ID, peerConnection, signallingService, logger);
 
-		peerConnection.getLocalDescription.andReturn(LOCAL_DESCRIPTION);
-		peerConnection.getLocalIceCandidates.andReturn(LOCAL_ICE_CANDIDATES);
+		peerConnection.getLocalDescription.and.returnValue(LOCAL_DESCRIPTION);
+		peerConnection.getLocalIceCandidates.and.returnValue(LOCAL_ICE_CANDIDATES);
 	});
 
 	describe('when getting the remote peer', function() {
@@ -53,7 +53,7 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			createOfferResult = "CREATE_OFFER_RESULT";
-			peerConnection.createOffer.andReturn(createOfferResult);
+			peerConnection.createOffer.and.returnValue(createOfferResult);
 		});
 
 		it('delegates to the peer connection', function() {
@@ -68,7 +68,7 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			createAnswerResult = "CREATE_ANSWER_RESULT";
-			peerConnection.createAnswer.andReturn(createAnswerResult);
+			peerConnection.createAnswer.and.returnValue(createAnswerResult);
 		});
 
 		it('delegates to the peer connection', function() {
@@ -83,7 +83,7 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			sendAnswerResult = ClientMocks.mockPromise("SEND_ANSWER_RESULT");
-			signallingService.sendAnswer.andReturn(sendAnswerResult);
+			signallingService.sendAnswer.and.returnValue(sendAnswerResult);
 		});
 
 		it('delegates to the signalling service', function() {
@@ -93,7 +93,7 @@ describe("The Channel", function() {
 
 		it('sets the lastOutstandingPromise', function() {
 		 	channel.sendAnswer();
-		 	sendAnswerResult.isPending.andReturn(true);
+		 	sendAnswerResult.isPending.and.returnValue(true);
 		 	channel.cancel();
 		 	expect(sendAnswerResult.cancel).toHaveBeenCalled();
 		});
@@ -105,21 +105,14 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			rtcDataChannel = ClientMocks.mockRtcDataChannel();
-			peerConnection.waitForChannelEstablishment.andReturn(Promise.resolve(rtcDataChannel));
+			peerConnection.waitForChannelEstablishment.and.returnValue(Promise.resolve(rtcDataChannel));
 		});
 
-		it('delegates to the peer connection', function() {
-			runs(function() {
-				channel.waitForChannelEstablishment().then(successCallback).catch(failureCallback);
-				expect(peerConnection.waitForChannelEstablishment).toHaveBeenCalled();
-			});
-
-			waits(10);
-
-			runs(function() {
-				expect(successCallback).toHaveBeenCalled();
-				expect(failureCallback).not.toHaveBeenCalled();
-			})
+		it('delegates to the peer connection', function(done) {
+            channel.waitForChannelEstablishment().then(function() {
+                expect(peerConnection.waitForChannelEstablishment).toHaveBeenCalled();
+                done();
+            });
 		});
 	});
 
@@ -129,7 +122,7 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			sendOfferResult = ClientMocks.mockPromise();
-			signallingService.sendOffer.andReturn(sendOfferResult);
+			signallingService.sendOffer.and.returnValue(sendOfferResult);
 			channel.createOffer(CHANNEL_TYPE);
 		});
 
@@ -139,7 +132,7 @@ describe("The Channel", function() {
 		});
 
 		it('stores the promise for later cancellation', function() {
-			sendOfferResult.isPending.andReturn(true);
+			sendOfferResult.isPending.and.returnValue(true);
 			channel.sendOffer();
 			channel.cancel();
 			expect(sendOfferResult.cancel).toHaveBeenCalled();
@@ -152,7 +145,7 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			waitForAnswerResult = ClientMocks.mockPromise();
-			signallingService.waitForAnswer.andReturn(waitForAnswerResult);
+			signallingService.waitForAnswer.and.returnValue(waitForAnswerResult);
 		});
 
 		it('delegates to the signalling service', function() {
@@ -160,7 +153,7 @@ describe("The Channel", function() {
 		});
 
 		it('stores the promise for later cancellation', function() {
-			waitForAnswerResult.isPending.andReturn(true);
+			waitForAnswerResult.isPending.and.returnValue(true);
 			channel.waitForAnswer();
 			channel.cancel();
 			expect(waitForAnswerResult.cancel).toHaveBeenCalled();
@@ -173,7 +166,7 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			handleAnswerResult = "HANDLE_ANSWER_RESULT";
-			peerConnection.handleAnswer.andReturn(handleAnswerResult);
+			peerConnection.handleAnswer.and.returnValue(handleAnswerResult);
 		});
 
 		it('delegates to the peer connection', function() {
@@ -189,7 +182,7 @@ describe("The Channel", function() {
 		beforeEach(function() {
 			rtcDataChannel = ClientMocks.mockRtcDataChannel();
 			waitForChannelToOpenResult = Promise.resolve(rtcDataChannel);
-			peerConnection.waitForChannelToOpen.andReturn(waitForChannelToOpenResult);
+			peerConnection.waitForChannelToOpen.and.returnValue(waitForChannelToOpenResult);
 		});
 
 		it('delegates to the peer connection', function() {
@@ -197,16 +190,11 @@ describe("The Channel", function() {
 			expect(peerConnection.waitForChannelToOpen).toHaveBeenCalled();
 		});
 
-		it('starts listening for messages on the opened channel', function() {
-			runs(function() {
-				channel.waitForChannelToOpen();
-			});
-
-			waits(10);
-
-			runs(function() {
-				expect(rtcDataChannel.onmessage).toEqual(jasmine.any(Function));
-			});
+		it('starts listening for messages on the opened channel', function(done) {
+            channel.waitForChannelToOpen().then(function() {
+                expect(rtcDataChannel.onmessage).toEqual(jasmine.any(Function));
+                done();
+            });
 		});
 	});
 
@@ -221,14 +209,12 @@ describe("The Channel", function() {
 		describe('and the channel has been established', function() {
 			var rtcDataChannel;
 
-			beforeEach(function() {
-				runs(function() {
-					rtcDataChannel = ClientMocks.mockRtcDataChannel();
-					peerConnection.waitForChannelToOpen.andReturn(Promise.resolve(rtcDataChannel));
-					channel.waitForChannelToOpen();
-				});
-
-				waits(10);
+			beforeEach(function(done) {
+                rtcDataChannel = ClientMocks.mockRtcDataChannel();
+                peerConnection.waitForChannelToOpen.and.returnValue(Promise.resolve(rtcDataChannel));
+                channel.waitForChannelToOpen().then(function() {
+                    done();
+                });
 			});
 
 			it('throws an error if the readyState is anything other than "open"', function() {
@@ -259,51 +245,33 @@ describe("The Channel", function() {
 
 		var RECEIVE_TIMEOUT_MS = 5011;
 
-		it('will reject with failure if the channel is not established', function() {
+		it('will reject with failure if the channel is not established', function(done) {
 
-			runs(function() {
-				channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
-					.then(successCallback)
-					.catch(failureCallback);
-				});
-
-			waits(10);
-
-			runs(function() {
-				expect(successCallback).not.toHaveBeenCalled();
-				expect(failureCallback).toHaveBeenCalled();
-			});
+            channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
+                .catch(function() {
+                    done();
+                });
 		});
 
 		describe("And the channel is established", function() {
 
 			var rtcDataChannel;
 
-			beforeEach(function() {
-				runs(function() {
-					rtcDataChannel = ClientMocks.mockRtcDataChannel();
-					peerConnection.waitForChannelToOpen.andReturn(Promise.resolve(rtcDataChannel));
-					channel.waitForChannelToOpen();
-				});
-
-				waits(10);
+			beforeEach(function(done) {
+                rtcDataChannel = ClientMocks.mockRtcDataChannel();
+                peerConnection.waitForChannelToOpen.and.returnValue(Promise.resolve(rtcDataChannel));
+                channel.waitForChannelToOpen().then(function() {
+                    done();
+                });
 			});
 
-			it('will reject with failure if the readyState is anything other than "open"', function() {
+			it('will reject with failure if the readyState is anything other than "open"', function(done) {
 				rtcDataChannel.readyState = "something other than 'open'";
 
-				runs(function() {
-					channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
-						.then(successCallback)
-						.catch(failureCallback);
-					});
-
-				waits(10);
-
-				runs(function() {
-					expect(successCallback).not.toHaveBeenCalled();
-					expect(failureCallback).toHaveBeenCalled();
-				});
+                channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
+                    .catch(function() {
+                        done();
+                    });
 			});
 
 			describe('and the channel is in the open state', function() {
@@ -312,70 +280,36 @@ describe("The Channel", function() {
 					rtcDataChannel.readyState = "open";
 				});
 
-				it('will resolve with the message if it is received before the timeout', function() {
-					runs(function() {
-						channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
-							.then(successCallback)
-							.catch(failureCallback);
+				it('will resolve with the message if it is received before the timeout', function(done) {
+                    channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
+                        .then(function(result) {
+                            expect(result).toBe(MESSAGE_PAYLOAD);
+                            done();
+                        });
 
-						rtcDataChannel.onmessage({
-							data: JSON.stringify(MESSAGE)
-						});
-					});
-
-					waits(10);
-
-					runs(function() {
-						expect(successCallback).toHaveBeenCalledWith(MESSAGE_PAYLOAD);
-					});
+                    rtcDataChannel.onmessage({
+                        data: JSON.stringify(MESSAGE)
+                    });
 				});
 
-				it('will reject with a timeout error if the timeout expires before the message is received', function() {
-					asyncExecService.setTimeout.andCallFake(function(callback) {
+				it('will reject with a timeout error if the timeout expires before the message is received', function(done) {
+					asyncExecService.setTimeout.and.callFake(function(callback) {
 						setTimeout(callback, 1);
 					});
 
-					runs(function() {
-						channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
-							.then(successCallback)
-							.catch(failureCallback);
-						});
-					waits(10);
-
-					// The message arrives after the timeout
-					runs(function() {
-						rtcDataChannel.onmessage({
-							data: JSON.stringify(MESSAGE)
-						});
-					});
-					waits(10);
-
-					runs(function() {
-						expect(successCallback).not.toHaveBeenCalled();
-						expect(failureCallback).toHaveBeenCalled();
-					});
+                    channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
+                        .catch(Promise.TimeoutError, function() {
+                            done();
+                        });
 				});
 
-				it('will reject with a cancellation error if cancel is called before the message is received', function() {
-					runs(function() {
-						channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
-							.then(successCallback)
-							.catch(failureCallback)
-							.cancel();
-						});
-					waits(10);
-					// The message arrives after the cancel
-					runs(function() {
-						rtcDataChannel.onmessage({
-							data: JSON.stringify(MESSAGE)
-						});
-					});
-					waits(10);
-
-					runs(function() {
-						expect(successCallback).not.toHaveBeenCalled();
-						expect(failureCallback).toHaveBeenCalled();
-					});
+				it('will reject with a cancellation error if cancel is called before the message is received', function(done) {
+                    channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
+                        .then(successCallback)
+                        .catch(Promise.CancellationError, function() {
+                            done();
+                        })
+                        .cancel();
 				});
 			});
 		});
