@@ -1,6 +1,8 @@
 cyclon.p2p-rtc - A WebRTC abstraction layer
 ===========================================
 
+[![Build Status](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client.svg?branch=master)](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client)
+
 The client-side component of a simple WebRTC abstraction layer.
 
 Written for use by the cyclon.p2p WebRTC communications module this abstraction features a simple API for establishing WebRTC data channels and sending and receiving data over them.
