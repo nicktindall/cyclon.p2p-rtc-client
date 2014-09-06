@@ -18,13 +18,13 @@ describe("The PeerConnectionFactory", function() {
         }
     ];
 
-    var asyncExecService,
-        rtcObjectFactory,
+    var CHANNEL_STATE_TIMEOUT = 5011;
+
+    var rtcObjectFactory,
         logger,
         peerConnectionFactory;
 
     beforeEach(function() {
-        asyncExecService = ClientMocks.mockAsyncExecService();
         rtcObjectFactory = ClientMocks.mockRtcObjectFactory();
         logger = ClientMocks.mockLoggingService();
 
@@ -36,7 +36,7 @@ describe("The PeerConnectionFactory", function() {
         describe("and there are ICE servers", function() {
 
             beforeEach(function() {
-                peerConnectionFactory = new PeerConnectionFactory(rtcObjectFactory, asyncExecService, logger, ICE_SERVERS);
+                peerConnectionFactory = new PeerConnectionFactory(rtcObjectFactory, logger, ICE_SERVERS, CHANNEL_STATE_TIMEOUT);
             });
 
             it("creates the ICE candidates", function() {
@@ -59,7 +59,7 @@ describe("The PeerConnectionFactory", function() {
 
         describe("and there are unsupported ICE servers", function() {
             beforeEach(function() {
-                peerConnectionFactory = new PeerConnectionFactory(rtcObjectFactory, asyncExecService, logger, ICE_SERVERS);
+                peerConnectionFactory = new PeerConnectionFactory(rtcObjectFactory, logger, ICE_SERVERS, CHANNEL_STATE_TIMEOUT);
             });
 
             it("generates a peerConnectionConfig with the unsupported iceServers omitted", function() {
@@ -81,7 +81,7 @@ describe("The PeerConnectionFactory", function() {
         describe("and there are no ICE servers", function() {
 
             beforeEach(function() {
-                peerConnectionFactory = new PeerConnectionFactory(rtcObjectFactory, asyncExecService, logger, null);
+                peerConnectionFactory = new PeerConnectionFactory(rtcObjectFactory, logger, null, CHANNEL_STATE_TIMEOUT);
             });
 
             it("generates a peerConnectionConfig with an empty iceServers array", function() {

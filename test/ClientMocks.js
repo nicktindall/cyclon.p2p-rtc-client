@@ -13,7 +13,7 @@ module.exports.mockAsyncExecService = function () {
 };
 
 module.exports.mockPeerConnection = function (name) {
-    return jasmine.createSpyObj(name || 'peerConnection', ['createOffer', 'createAnswer', 'waitForChannelEstablishment', 'waitForChannelToOpen', 'handleAnswer', 'close', 'waitForIceCandidates', 'cancel', 'getLocalDescription', 'getLocalIceCandidates', 'removeAllListeners']);
+    return jasmine.createSpyObj(name || 'peerConnection', ['createOffer', 'createAnswer', 'waitForChannelEstablishment', 'waitForChannelToOpen', 'handleAnswer', 'close', 'waitForIceCandidates', 'cancel', 'getLocalDescription', 'getLocalIceCandidates', 'removeAllListeners', 'processRemoteIceCandidates', 'startEmittingIceCandidates', 'on']);
 };
 
 module.exports.mockTimingService = function () {

@@ -3,6 +3,7 @@
 var ClientMocks = require("./ClientMocks");
 var Channel = require("../lib/Channel");
 var Promise = require("bluebird");
+var events = require("events");
 
 describe("The Channel", function() {
 
@@ -10,18 +11,30 @@ describe("The Channel", function() {
 		CORRELATION_ID = 12345,
 		REMOTE_DESCRIPTION = "remoteSDP",
 		LOCAL_DESCRIPTION = "localSDP",
-		LOCAL_ICE_CANDIDATES = ['d', 'e', 'f'],
+		LOCAL_ICE_CANDIDATES = [{
+            candidate: 'd'
+        }, {
+            candidate: 'e'
+        }, {
+            candidate: 'f'
+        }],
 		CHANNEL_TYPE = "CHANNEL_TYPE",
 		MESSAGE_TYPE = "MESSAGE_TYPE",
 		MESSAGE_PAYLOAD = "MESSAGE_PAYLOAD",
 		MESSAGE = {
 			type: MESSAGE_TYPE,
 			payload: MESSAGE_PAYLOAD
-		};
+        },
+        REMOTE_ICE_CANDIDATES = [{
+            candidate: "a"
+        }, {
+            candidate: "b"
+        }, {
+            candidate: "c"
+        }];
 
 	var successCallback,
 		failureCallback,
-		asyncExecService,
 		peerConnection,
 		signallingService,
 		logger,
@@ -30,11 +43,10 @@ describe("The Channel", function() {
 	beforeEach(function() {
 		successCallback = ClientMocks.createSuccessCallback();
 		failureCallback = ClientMocks.createFailureCallback();
-		asyncExecService = ClientMocks.mockAsyncExecService();
 		peerConnection = ClientMocks.mockPeerConnection();
 		signallingService = ClientMocks.mockSignallingService();
 		logger = ClientMocks.mockLoggingService();
-		channel = new Channel(asyncExecService, REMOTE_PEER, CORRELATION_ID, peerConnection, signallingService, logger);
+		channel = new Channel(REMOTE_PEER, CORRELATION_ID, peerConnection, signallingService, logger);
 
 		peerConnection.getLocalDescription.and.returnValue(LOCAL_DESCRIPTION);
 		peerConnection.getLocalIceCandidates.and.returnValue(LOCAL_ICE_CANDIDATES);
@@ -174,6 +186,78 @@ describe("The Channel", function() {
 		});
 	});
 
+
+    describe("when listening for remote ICE candidates", function() {
+
+        var CANDIDATE_EVENT_ID = "candidates-"+REMOTE_PEER.id+"-"+CORRELATION_ID;
+
+        describe("and a correlation ID has been determined", function() {
+
+            beforeEach(function() {
+                channel.startListeningForRemoteIceCandidates();
+            });
+
+            it("adds a candidates listener to the signalling service", function() {
+                expect(signallingService.on).toHaveBeenCalledWith(CANDIDATE_EVENT_ID, jasmine.any(Function));
+            });
+        });
+
+        describe("and remote candidates arrive", function() {
+
+            beforeEach(function() {
+                signallingService = new events.EventEmitter();
+                channel = new Channel(REMOTE_PEER, CORRELATION_ID, peerConnection, signallingService, logger);
+                channel.startListeningForRemoteIceCandidates();
+            });
+
+            it("delegates to the PeerConnection to process candidates as they are received", function() {
+                signallingService.emit(CANDIDATE_EVENT_ID, REMOTE_ICE_CANDIDATES);
+                expect(peerConnection.processRemoteIceCandidates(REMOTE_ICE_CANDIDATES));
+            });
+        });
+    });
+
+    describe("when sending ICE candidates", function() {
+
+        beforeEach(function() {
+            channel.startSendingIceCandidates();
+        });
+
+        it("adds a listener to the PeerConnection for new ICE candidates", function() {
+            expect(peerConnection.on).toHaveBeenCalledWith("iceCandidates", jasmine.any(Function));
+        });
+
+        it("tells the peerConnection to start emitting any cached candidates", function() {
+            expect(peerConnection.startEmittingIceCandidates).toHaveBeenCalled();
+        });
+
+        describe("and candidates are gathered", function() {
+            beforeEach(function() {
+                peerConnection = new events.EventEmitter();
+                peerConnection.startEmittingIceCandidates = jasmine.createSpy();
+                signallingService.sendIceCandidates.and.returnValue(Promise.resolve(null));
+                channel = new Channel(REMOTE_PEER, CORRELATION_ID, peerConnection, signallingService, logger);
+                channel.startSendingIceCandidates();
+                peerConnection.emit("iceCandidates", LOCAL_ICE_CANDIDATES);
+            });
+
+            it("sends them to the remote peer via the signalling service", function() {
+                expect(signallingService.sendIceCandidates).toHaveBeenCalledWith(REMOTE_PEER, CORRELATION_ID, LOCAL_ICE_CANDIDATES);
+            });
+        });
+    });
+
+    describe("when stopping ICE candidate sending", function() {
+
+        beforeEach(function() {
+            channel.stopSendingIceCandidates();
+        });
+
+        it("removes the iceCandidates listener from the PeerConnection", function() {
+            expect(peerConnection.removeAllListeners).toHaveBeenCalledWith("iceCandidates");
+        });
+    });
+
 	describe('when waiting for a channel to open', function() {
 
 		var waitForChannelToOpenResult,
@@ -243,7 +327,7 @@ describe("The Channel", function() {
 
 	describe('when receiving a message', function() {
 
-		var RECEIVE_TIMEOUT_MS = 5011;
+		var RECEIVE_TIMEOUT_MS = 100;
 
 		it('will reject with failure if the channel is not established', function(done) {
 
@@ -293,11 +377,7 @@ describe("The Channel", function() {
 				});
 
 				it('will reject with a timeout error if the timeout expires before the message is received', function(done) {
-					asyncExecService.setTimeout.and.callFake(function(callback) {
-						setTimeout(callback, 1);
-					});
-
-                    channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
+					channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
                         .catch(Promise.TimeoutError, function() {
                             done();
                         });

@@ -237,7 +237,7 @@ describe("The socket.io signalling service", function () {
                     .cancel();
             });
 
-            it("stops listening for the answer message", function () {
+            it("stops listening for the answer message", function (done) {
 
                 var message = {
                     sourceId: REMOTE_ID,
@@ -248,7 +248,8 @@ describe("The socket.io signalling service", function () {
 
                 setTimeout(function () {
                     expect(successCallback).not.toHaveBeenCalled();
-                }, 10);
+                    done();
+                }, 100);
             });
         });
     });

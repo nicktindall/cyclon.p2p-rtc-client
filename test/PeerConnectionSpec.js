@@ -6,11 +6,16 @@ var ClientMocks = require("./ClientMocks");
 
 describe("The peer connection", function () {
 
+    var CHANNEL_STATE_TIMEOUT_MS = 100;
     var LOCAL_DESCRIPTION = "LOCAL_DESCRIPTION";
     var REMOTE_DESCRIPTION = "REMOTE_DESCRIPTION";
-    var REMOTE_ICE_CANDIDATES = ["a", "b", "c"];
-    var TIMEOUT_ID = "TIMEOUT_ID";
-    var INTERVAL_ID = "INTERVAL_ID";
+    var REMOTE_ICE_CANDIDATES = [{
+        candidate: "a"
+    }, {
+        candidate: "b"
+    }, {
+        candidate: "c"
+    }];
     var REMOTE_DESCRIPTION_PREFIX = "RD_";
     var REMOTE_CANDIDATE_PREFIX = "RC_";
 
@@ -24,7 +29,6 @@ describe("The peer connection", function () {
 
     var peerConnection,
         rtcPeerConnection,
-        asyncExecService,
         rtcDataChannel,
         rtcObjectFactory,
         loggingService;
@@ -35,10 +39,8 @@ describe("The peer connection", function () {
         successCallback = ClientMocks.createSuccessCallback();
         failureCallback = ClientMocks.createFailureCallback();
 
-        asyncExecService = ClientMocks.mockAsyncExecService();
         rtcObjectFactory = ClientMocks.mockRtcObjectFactory();
         rtcPeerConnection = ClientMocks.mockRtcPeerConnection();
-        rtcPeerConnection.localDescription = LOCAL_DESCRIPTION; // Does this really exist?
         rtcDataChannel = ClientMocks.mockRtcDataChannel();
         loggingService = ClientMocks.mockLoggingService();
 
@@ -52,10 +54,8 @@ describe("The peer connection", function () {
         rtcObjectFactory.createRTCIceCandidate.and.callFake(function (candidateString) {
             return remoteCandidateFor(candidateString);
         });
-        asyncExecService.setTimeout.and.returnValue(TIMEOUT_ID);
-        asyncExecService.setInterval.and.returnValue(INTERVAL_ID);
 
-        peerConnection = new PeerConnection(rtcPeerConnection, asyncExecService, rtcObjectFactory, loggingService);
+        peerConnection = new PeerConnection(rtcPeerConnection, rtcObjectFactory, loggingService, CHANNEL_STATE_TIMEOUT_MS);
     });
 
     describe("when creating an offer", function () {
@@ -135,6 +135,25 @@ describe("The peer connection", function () {
 
             expect(iceCandidatesHandler).toHaveBeenCalledWith([firstIceCandidate]);
             expect(iceCandidatesHandler).toHaveBeenCalledWith([secondIceCandidate]);
+        });
+
+        it("will store the unique candidates and make them available via a getter", function() {
+
+            var firstIceCandidate = "123";
+            var secondIceCandidate = "456";
+            var thirdIceCandidate = "123";
+
+            rtcPeerConnection.onicecandidate({
+                candidate: firstIceCandidate
+            });
+            rtcPeerConnection.onicecandidate({
+                candidate: secondIceCandidate
+            });
+            rtcPeerConnection.onicecandidate({
+                candidate: thirdIceCandidate
+            });
+
+            expect(peerConnection.getLocalIceCandidates()).toEqual([firstIceCandidate, secondIceCandidate]);
         });
     });
 
@@ -235,10 +254,9 @@ describe("The peer connection", function () {
 
             describe("and the channel opens successfully", function () {
 
-                it("clears the timeout and passes an open channel to resolve", function (done) {
+                it("passes the open channel to resolve", function (done) {
 
                     peerConnection.waitForChannelToOpen().then(function (result) {
-                        expect(asyncExecService.clearTimeout).toHaveBeenCalledWith(TIMEOUT_ID);
                         expect(result).toBe(rtcDataChannel);
                         done();
                     });
@@ -250,11 +268,7 @@ describe("The peer connection", function () {
             describe("and a timeout occurs before the channel is opened", function () {
 
                 beforeEach(function (done) {
-                    asyncExecService.setTimeout.and.callFake(function (callback) {
-                        setTimeout(callback, 10);
-                    });
-                    peerConnection.waitForChannelToOpen()
-                        .catch(Promise.TimeoutError, done);
+                    peerConnection.waitForChannelToOpen().catch(Promise.TimeoutError, done);
                 });
 
                 it("clears the channel onopen listener", function () {
@@ -268,10 +282,6 @@ describe("The peer connection", function () {
                     peerConnection.waitForChannelToOpen()
                         .catch(Promise.CancellationError, done)
                         .cancel();
-                });
-
-                it("clears the timeout", function () {
-                    expect(asyncExecService.clearTimeout).toHaveBeenCalledWith(TIMEOUT_ID);
                 });
 
                 it("clears the channel onopen listener", function () {
@@ -288,15 +298,7 @@ describe("The peer connection", function () {
 
             it("waits for the channel to open", function (done) {
                 peerConnection.waitForChannelToOpen()
-                    .then(successCallback)
-                    .catch(failureCallback);
-
-                setTimeout(function () {
-                    expect(successCallback).not.toHaveBeenCalled();
-                    expect(failureCallback).not.toHaveBeenCalled();
-                    expect(rtcDataChannel.onopen).toEqual(jasmine.any(Function));
-                    done();
-                }, 10);
+                    .catch(Promise.TimeoutError, done);
             });
         });
 
@@ -307,7 +309,12 @@ describe("The peer connection", function () {
             });
 
             it("rejects with an error", function (done) {
-                peerConnection.waitForChannelToOpen().catch(done);
+                var self = this;
+                peerConnection.waitForChannelToOpen()
+                    .catch(Promise.CancellationError, Promise.TimeoutError, function(e) {
+                        self.fail(e);
+                    })
+                    .catch(done);
             });
         });
     });
@@ -322,65 +329,46 @@ describe("The peer connection", function () {
                 });
             });
 
-            it("will resolve with the already established channel", function () {
+            it("will resolve with the already established channel", function (done) {
                 peerConnection.waitForChannelEstablishment()
                     .then(function (result) {
                         expect(result).toBe(rtcDataChannel);
+                        done();
                     });
             });
         });
 
         describe("and no channel is yet established", function () {
 
-            var promise;
-
-            beforeEach(function (done) {
-                promise = peerConnection.waitForChannelEstablishment();
-                setTimeout(done, 10);
-            });
-
-            it("sets a timeout", function () {
-                expect(asyncExecService.setTimeout).toHaveBeenCalledWith(jasmine.any(Function), jasmine.any(Number));
-            });
-
             it("adds an ondatachannel listener", function () {
+                peerConnection.waitForChannelEstablishment().catch(Promise.TimeoutError, function() {
+                    // This will happen eventually
+                });
                 expect(rtcPeerConnection.ondatachannel).toEqual(jasmine.any(Function));
-            });
-
-            it("waits for an open channel", function () {
-                expect(promise.isResolved()).toBeFalsy();
             });
 
             describe("and cancel is called before it is established", function () {
 
-                beforeEach(function (done) {
-                    promise.catch(Promise.CancellationError, done);
-                    promise.cancel();
-                });
-
-                it("clears the timeout", function () {
-                    expect(asyncExecService.clearTimeout).toHaveBeenCalledWith(TIMEOUT_ID);
-                });
-
-                it("nullifies the ondatachannel listener", function () {
-                    expect(rtcPeerConnection.ondatachannel).toBeNull();
+                it("nullifies the ondatachannel listener", function (done) {
+                    peerConnection.waitForChannelEstablishment()
+                        .catch(Promise.CancellationError, function() {
+                            expect(rtcPeerConnection.ondatachannel).toBeNull();
+                            done();
+                        })
+                        .cancel();
                 });
             });
 
             describe("and a channel is established before the timeout", function () {
 
                 beforeEach(function (done) {
-                    promise.then(function(result) {
+                    peerConnection.waitForChannelEstablishment().then(function(result) {
                         expect(result).toBe(rtcDataChannel);
                         done();
                     });
                     rtcPeerConnection.ondatachannel({
                         channel: rtcDataChannel
                     });
-                });
-
-                it("clears the timeout", function () {
-                    expect(asyncExecService.clearTimeout).toHaveBeenCalledWith(TIMEOUT_ID);
                 });
 
                 it("nullifies the ondatachannel listener", function () {
@@ -391,14 +379,11 @@ describe("The peer connection", function () {
             describe("and a timeout occurs before the channel is established", function () {
 
                 beforeEach(function (done) {
-                    asyncExecService.setTimeout.and.callFake(function (callback) {
-                        setTimeout(callback, 10);
-                    });
                     peerConnection.waitForChannelEstablishment()
                         .catch(Promise.TimeoutError, done);
                 });
 
-                it("clears the channel ondatachannel listener", function () {
+                it("nullifies the ondatachannel listener", function () {
                     expect(rtcPeerConnection.ondatachannel).toBeNull();
                 });
             });
@@ -417,9 +402,58 @@ describe("The peer connection", function () {
         it("sets the remote description", function () {
             expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION));
         });
+    });
 
-        it("triggers processing of cached remote candidates", function () {
-            // TODO!!!
+    describe("when processing remote ICE candidates", function() {
+
+        beforeEach(function() {
+            peerConnection.createOffer();
+        });
+
+        describe("and no answer has yet been received", function() {
+
+            beforeEach(function() {
+                peerConnection.processRemoteIceCandidates(REMOTE_ICE_CANDIDATES);
+            });
+
+            it("delays setting the remote candidates on the RTC peer connection", function() {
+                expect(rtcPeerConnection.addIceCandidate).not.toHaveBeenCalled();
+            });
+        });
+
+        describe("and an answer has been received", function() {
+
+            beforeEach(function() {
+                peerConnection.handleAnswer({
+                    sessionDescription: REMOTE_DESCRIPTION
+                });
+                peerConnection.processRemoteIceCandidates(REMOTE_ICE_CANDIDATES);
+            });
+
+            it("adds the remote ICE candidates to the RTCPeerConnection", function() {
+                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[0]));
+                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[1]));
+                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[2]));
+            });
+        });
+
+        describe("and some candidates arrive before the answer", function() {
+
+            beforeEach(function() {
+                peerConnection.processRemoteIceCandidates(REMOTE_ICE_CANDIDATES);
+            });
+
+            it("adds them to the connection after the answer has been processed", function() {
+                expect(rtcPeerConnection.addIceCandidate).not.toHaveBeenCalled();
+
+                peerConnection.handleAnswer({
+                    sessionDescription: REMOTE_DESCRIPTION
+                });
+
+                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[0]));
+                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[1]));
+                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[2]));
+            });
         });
     });
 
@@ -475,11 +509,12 @@ describe("The peer connection", function () {
                     .catch(Promise.CancellationError, failureCallback);
             });
 
-            it("will not cancel the last outstanding promise", function () {
+            it("will not cancel the last outstanding promise", function (done) {
                 peerConnection.cancel();
 
                 setTimeout(function () {
                     expect(failureCallback).not.toHaveBeenCalled();
+                    done();
                 }, 10);
             });
         });
