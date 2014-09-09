@@ -48,6 +48,13 @@ describe("The peer connection", function () {
         // Mock behaviour
         //
         rtcPeerConnection.createDataChannel.and.returnValue(rtcDataChannel);
+
+        rtcPeerConnection.setLocalDescription.and.callFake(function(sdp, success) {
+            setTimeout(success, 1);
+        });
+        rtcPeerConnection.setRemoteDescription.and.callFake(function(sdp, success) {
+            setTimeout(success, 1);
+        });
         rtcObjectFactory.createRTCSessionDescription.and.callFake(function (sessionDescriptionString) {
             return remoteDescriptionFor(sessionDescriptionString);
         });
@@ -90,7 +97,7 @@ describe("The peer connection", function () {
             });
 
             it("sets the local description", function () {
-                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION);
+                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION, jasmine.any(Function), jasmine.any(Function));
             });
 
             it('makes the local description available via the getter', function () {
@@ -164,13 +171,8 @@ describe("The peer connection", function () {
                 .then(successCallback).catch(failureCallback);
 
             setTimeout(function () {
-                expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION));
-                expect(rtcPeerConnection.createAnswer).toHaveBeenCalledWith(jasmine.any(Function), jasmine.any(Function), {
-                    mandatory: {
-                        OfferToReceiveAudio: false,
-                        OfferToReceiveVideo: false
-                    }
-                });
+                expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION), jasmine.any(Function), jasmine.any(Function));
+                expect(rtcPeerConnection.createAnswer).toHaveBeenCalledWith(jasmine.any(Function), jasmine.any(Function));
 
                 expect(successCallback).not.toHaveBeenCalled();
                 expect(failureCallback).not.toHaveBeenCalled();
@@ -190,7 +192,7 @@ describe("The peer connection", function () {
             });
 
             it("sets the local description", function () {
-                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION);
+                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION, jasmine.any(Function), jasmine.any(Function));
             });
         });
 
@@ -400,14 +402,19 @@ describe("The peer connection", function () {
         });
 
         it("sets the remote description", function () {
-            expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION));
+            expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION), jasmine.any(Function), jasmine.any(Function));
         });
     });
 
     describe("when processing remote ICE candidates", function() {
 
-        beforeEach(function() {
-            peerConnection.createOffer();
+        beforeEach(function(done) {
+            rtcPeerConnection.createOffer.and.callFake(function(success) {
+                setTimeout(function() {
+                    success(LOCAL_DESCRIPTION);
+                }, 1);
+            });
+            peerConnection.createOffer().then(done);
         });
 
         describe("and no answer has yet been received", function() {
@@ -423,11 +430,13 @@ describe("The peer connection", function () {
 
         describe("and an answer has been received", function() {
 
-            beforeEach(function() {
+            beforeEach(function(done) {
                 peerConnection.handleAnswer({
                     sessionDescription: REMOTE_DESCRIPTION
+                }).then(function() {
+                    peerConnection.processRemoteIceCandidates(REMOTE_ICE_CANDIDATES);
+                    done();
                 });
-                peerConnection.processRemoteIceCandidates(REMOTE_ICE_CANDIDATES);
             });
 
             it("adds the remote ICE candidates to the RTCPeerConnection", function() {
@@ -443,16 +452,17 @@ describe("The peer connection", function () {
                 peerConnection.processRemoteIceCandidates(REMOTE_ICE_CANDIDATES);
             });
 
-            it("adds them to the connection after the answer has been processed", function() {
+            it("adds them to the connection after the answer has been processed", function(done) {
                 expect(rtcPeerConnection.addIceCandidate).not.toHaveBeenCalled();
 
                 peerConnection.handleAnswer({
                     sessionDescription: REMOTE_DESCRIPTION
+                }).then(function() {
+                    expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[0]));
+                    expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[1]));
+                    expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[2]));
+                    done();
                 });
-
-                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[0]));
-                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[1]));
-                expect(rtcPeerConnection.addIceCandidate).toHaveBeenCalledWith(remoteCandidateFor(REMOTE_ICE_CANDIDATES[2]));
             });
         });
     });
