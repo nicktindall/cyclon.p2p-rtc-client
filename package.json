@@ -33,8 +33,9 @@
     "jasmine-node": "2.0.x"
   },
   "dependencies": {
-    "cyclon.p2p-common": "0.0.4",
-    "socket.io-client": "1.0.x",
-    "bluebird": "2.3.x"
+    "agentkeepalive": "0.2.2",
+    "bluebird": "2.3.x",
+    "cyclon.p2p-common": "0.0.5",
+    "socket.io-client": "1.0.x"
   }
 }
