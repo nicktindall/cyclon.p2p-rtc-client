@@ -13,7 +13,7 @@ var SIGNALLING_SERVER = [
 ];
 var socketFactory = new rtc.SocketFactory();
 var timingService = new rtc.TimingService();
-var httpRequestService = new rtc.NodeHttpRequestService();
+var httpRequestService = new rtc.HttpRequestService();
 
 var allNodes = [];
 var startedNodes = [];
