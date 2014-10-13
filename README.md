@@ -1,5 +1,5 @@
-cyclon.p2p-rtc - A WebRTC abstraction layer
-===========================================
+cyclon.p2p-rtc-client - A WebRTC abstraction layer
+==================================================
 
 [![Build Status](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client.svg?branch=master)](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client)
 [![Dependencies](https://david-dm.org/nicktindall/cyclon.p2p-rtc-client.png)](https://david-dm.org/nicktindall/cyclon.p2p-rtc-client)
