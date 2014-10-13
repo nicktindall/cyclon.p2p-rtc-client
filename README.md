@@ -26,11 +26,11 @@ var angular = require('angular');  // or wherever angular comes from
 cyclonRtc.createAngularModule(angular);
 
 // Then any modules that depend on 'cyclon-rtc' can use the 'RTC' service exposed
-var myModule = angular.module("myModule", ["cyclon-rtc"])
-myModule.service("myService", ["RTC", function(rtcClient) {
-    // ...
+var myModule = angular.module('myModule', ['cyclon-rtc'])
+myModule.service('myService', ['RTC', function(rtcClient) {
+    ...
   }]);
-
+  
 ```
 
 The RTC API
@@ -74,17 +74,17 @@ You can change these defaults by specifying configuration values on the modules 
 
 ```
 rtc.buildAngularModule(angular)
-    .value("IceServers", [
+    .value('IceServers', [
         // Our corporate TURN server 
         {urls: ['turn:51.11.11.22'], username: 'specialUser', credential: 'topSecret'}
     ])
-    .value("SignallingServers", JSON.parse([
+    .value('SignallingServers', JSON.parse([
         // Our corporate signalling server instance
         {
-            "socket": {
-                "server": "http://signalling.mycompany.com"
+            'socket': {
+                'server': 'http://signalling.mycompany.com'
             },
-            "signallingApiBase": "http://signalling.mycompany.com"
+            'signallingApiBase': 'http://signalling.mycompany.com'
         }
     ]));
 ```
