@@ -16,7 +16,7 @@ First install cyclon-rtc-client as a runtime dependency using npm
 npm install cyclon-rtc-client --save
 ```
 
-If you are using browserify and AngularJS in your project you can include the "cyclon-rtc" service simply:
+If you are using browserify and AngularJS in your project you can include the 'cyclon-rtc' module simply:
 
 ```
 var cyclonRtc = require('cyclon-rtc-client');
@@ -37,32 +37,32 @@ The RTC API
 -----------
 The API for the RTC service exposed is as follows:
 
-connect(metadataProviders, rooms):
-    This will connect to the signalling servers configured and make the client ready to send and receive requests to other peers.
+### `connect(metadataProviders, rooms)`
+This will connect to the signalling servers configured and make the client ready to send and receive requests to other peers.
     
-    Parameters:
-    * metadataProviders: a hash of names to functions that return values which will be included in the node pointers created by the RTC client.
-    * rooms: An array of 'room' names that the client wishes to join. Joining a room means the client's pointer will be a candidate to be returned by the signalling server's ./api/peers?room=RoomName endpoint.
+#### Parameters:
+* metadataProviders: a hash of names to functions that return values which will be included in the node pointers created by the RTC client.
+* rooms: An array of 'room' names that the client wishes to join. Joining a room means the client's pointer will be a candidate to be returned by the signalling server's ./api/peers?room=RoomName endpoint.
     
-createNewPointer():
-    Returns a new 'node pointer' to the local client, this can be sent to other clients who will be able to use it to establish a connection.
+### `createNewPointer()`
+Returns a new 'node pointer' to the local client, this can be sent to other clients who will be able to use it to establish a connection.
     
-getLocalId():
-    Get the UUID of the local RTC client.
+### `getLocalId()`
+Get the UUID of the local RTC client.
     
-onChannel(type, callback):
-    Add an action to perform upon the establishment of a new incoming channel of a particular type.
+### `onChannel(type, callback)`
+Add an action to perform upon the establishment of a new incoming channel of a particular type.
     
-    Parameters:
-    * type: A string which uniquely identifies the type of channel to respond to
-    * callback: A function which will be invoked with a single parameter, the Channel object when an inbound channel of the specified type is established. It is the application's responsibility to close the Channel when the exchange is completed, a failure to do so will lead to memory leaks.
+#### Parameters:
+* type: A string which uniquely identifies the type of channel to respond to.
+* callback: A function which will be invoked with a single parameter, the Channel object when an inbound channel of the specified type is established. It is the application's responsibility to close the Channel when the exchange is completed, a failure to do so will lead to memory leaks.
         
-openChannel(type, remotePointer):
-    Open a channel of a particular type to a remote peer
+### `openChannel(type, remotePointer)`
+Open a channel of a particular type to a remote peer
     
-    Parameters:
-    * type: A string which uniquely identifies the type of channel to open
-    * remotePeer: The 'node pointer' of the remote peer to connect to. The remote peer can get this by calling createNewPointer() on its client and transmitting the pointer to the node peer wishing to connect.
+#### Parameters:
+* type: A string which uniquely identifies the type of channel to open.
+* remotePeer: The 'node pointer' of the remote peer to connect to. The remote peer can get this by calling createNewPointer() on its client and transmitting the pointer to the node peer wishing to connect.
         
 Configuration
 -------------
