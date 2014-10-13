@@ -2,89 +2,98 @@ cyclon.p2p-rtc - A WebRTC abstraction layer
 ===========================================
 
 [![Build Status](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client.svg?branch=master)](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client)
+[![Dependencies](https://david-dm.org/nicktindall/cyclon.p2p-rtc-client.png)](https://david-dm.org/nicktindall/cyclon.p2p-rtc-client)
 
 The client-side component of a simple WebRTC abstraction layer.
 
 Written for use by the cyclon.p2p WebRTC communications module this abstraction features a simple API for establishing WebRTC data channels and sending and receiving data over them.
 
-Signalling Server Redundancy
-----------------------------
+How to use
+----------
+First install cyclon-rtc-client as a runtime dependency using npm
 
-The client listens on multiple signalling servers using WebSockets for the offer and answer messages. By listening to multiple signalling servers, signalling server redundancy and hence a degree of fault tolerance is achieved. The client will retrieve a list of available signalling servers from the SignallingServerService and connect to the number of them specified by the same.
+```
+npm install cyclon-rtc-client --save
+```
 
-If disconnection from one of the current signalling servers is detected, another random server is chosen from the set available (again retreived from the SignallingServerService). If the only other servers available are servers the client has previously been disconnected from the client will prefer those least-recently disconnected from.
+If you are using browserify and AngularJS in your project you can include the "cyclon-rtc" service simply:
 
-CORS is utilised to allow nodes to connect to signalling servers not of the same origin as the page which serves up the client.
+```
+var cyclonRtc = require('cyclon-rtc-client');
+var angular = require('angular');  // or wherever angular comes from
 
-The set of signalling servers the client is currently connected to is made available via the getSignallingInfo() method. This will return a list of server specifications, which includes the base URL of the server's REST API which is used to send offers and answers to clients connected to it. This list is communicated to other nodes to provide them with a way of initiating an offer/answer exchange. When attempting to send an offer or answer to a remote node, clients try each of the signalling servers in random order (a crude attempt at load balancing) until one returns a 201 indicating the message has been delivered or all have been attempted unsuccessfully.
+// Create the 'cyclon-rtc' module
+cyclonRtc.createAngularModule(angular);
 
-Signalling Server Affinity
---------------------------
+// Then any modules that depend on 'cyclon-rtc' can use the 'RTC' service exposed
+var myModule = angular.module("myModule", ["cyclon-rtc"])
+myModule.service("myService", ["RTC", function(rtcClient) {
+    // ...
+  }]);
 
-The client takes an implementation of the DOM storage API as a parameter which it will use to store the current set of signalling servers each time the set changes. When choosing signalling servers for the initial set this storage will be queried and any signalling servers stored in it will be preferred if present in the list provided by the SignallingServerService. In this way it is possible using, for example, the DOM `sessionStorage` object in a browser to reconnect to the same signalling servers the client was connected to after a page refresh. This has the benefit that pointers to the node which are 'in the wild' will remain valid for longer.
+```
 
-The Signalling Server REST API
-------------------------------
+The RTC API
+-----------
+The API for the RTC service exposed is as follows:
 
-The signalling server REST API is the means by which nodes send offers and answers to other nodes.
+connect(metadataProviders, rooms):
+    This will connect to the signalling servers configured and make the client ready to send and receive requests to other peers.
+    
+    Parameters:
+    * metadataProviders: a hash of names to functions that return values which will be included in the node pointers created by the RTC client.
+    * rooms: An array of 'room' names that the client wishes to join. Joining a room means the client's pointer will be a candidate to be returned by the signalling server's ./api/peers?room=RoomName endpoint.
+    
+createNewPointer():
+    Returns a new 'node pointer' to the local client, this can be sent to other clients who will be able to use it to establish a connection.
+    
+getLocalId():
+    Get the UUID of the local RTC client.
+    
+onChannel(type, callback):
+    Add an action to perform upon the establishment of a new incoming channel of a particular type.
+    
+    Parameters:
+    * type: A string which uniquely identifies the type of channel to respond to
+    * callback: A function which will be invoked with a single parameter, the Channel object when an inbound channel of the specified type is established. It is the application's responsibility to close the Channel when the exchange is completed, a failure to do so will lead to memory leaks.
+        
+openChannel(type, remotePointer):
+    Open a channel of a particular type to a remote peer
+    
+    Parameters:
+    * type: A string which uniquely identifies the type of channel to open
+    * remotePeer: The 'node pointer' of the remote peer to connect to. The remote peer can get this by calling createNewPointer() on its client and transmitting the pointer to the node peer wishing to connect.
+        
+Configuration
+-------------
+By default the module created will use:
+* Three demonstration signalling servers deployed on Heroku. These should be used for evaluation purposes only as their availability is not guaranteed, and they are shared between anyone that uses this library with the default settings.
+* The 'public' STUN server provided by Google. Again, for any serious deployment users should deploy their own STUN and/or TURN servers. The Google STUN server probably cannot be relied upon to be there and freely available forever.
 
-Nodes communicate with each other 'pointers' to themselves and potentially other nodes they are aware of. The pointers contain the details of signalling server(s) the node are connected to which include the base URL of the following REST API. All endpoints mentioned are relative to this base URL.
+You can change these defaults by specifying configuration values on the modules that are created. e.g.
 
-./offer : This is where offers are sent, a POST is submitted containing the following JSON blob in its body;
+```
+rtc.buildAngularModule(angular)
+    .value("IceServers", [
+        // Our corporate TURN server 
+        {urls: ['turn:51.11.11.22'], username: 'specialUser', credential: 'topSecret'}
+    ])
+    .value("SignallingServers", JSON.parse([
+        // Our corporate signalling server instance
+        {
+            "socket": {
+                "server": "http://signalling.mycompany.com"
+            },
+            "signallingApiBase": "http://signalling.mycompany.com"
+        }
+    ]));
+```
 
-	{
-		channelType: (String)
-			The type of channel being offered
+You can also override many of the services specified in the modules if you feel like tinkering, check out the `buildAngularModule()` function in lib/index.js file for more details.
 
-		sourceId: (String)
-			The ID of the source node
+Signalling Servers
+------------------
+Check out the corresponding signalling server project at https://github.com/nicktindall/cyclon.p2p-rtc-server if you would like to run your own signalling servers. The whole signalling infrastructure is abstracted so you could also implement your own and use that instead. See `lib/SocketIOSignallingServer.js` for the interface expected.
 
-		correlationId: (Number)
-			The correlation ID which should be attached to the answer to this offer
-
-		sourcePointer: (Object)
-			The full node pointer to the source node
-
-		destinationId: (String)
-			The ID of the destination node, used by the signalling server to route the message
-
-		sessionDescription: (Object)
-        	The serialized RTCSessionDescription object
-
-		iceCandidates: (A list of Objects)
-        	The list of serialized RTCIcecandidate objects gathered
-	}
-
-	In response to an offer the signalling server will return;
-	 * a 201 if the destination node is still connected and the offer has been delivered
-	 * a 404 if the destination node is no longer connected and the offer could not be delivered
-
-./answer : This is where answers are sent, a POST is submitted containing the following JSON blob in its body;
-	
-	{
-		sourceId: (String)
-			The ID of the source node
-
-        correlationId: (Number)
-        	The correlation ID of the offer which this answer is a reply to
-
-        destinationId: (String)
-        	The ID of the destination node
-
-        sessionDescription: (Object)
-        	The serialized RTCSessionDescription object
-
-        iceCandidates: (a list of Objects)
-        	The list of serialized RTCIcecandidate objects gathered
-	}
-
-	As with the offer, responses are as follows;
-	* a 201 if the destination node is still connected to this server and the answer was delivered
-	* a 404 if the destination node is no longer connected to this signalling server so the answer could not be delivered
-
-The Client API
---------------
-
-** TODO **
 
 
