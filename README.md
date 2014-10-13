@@ -10,16 +10,16 @@ Written for use by the cyclon.p2p WebRTC communications module this abstraction 
 
 How to use
 ----------
-First install cyclon-rtc-client as a runtime dependency using npm
+First install cyclon.p2p-rtc-client as a runtime dependency using npm
 
 ```
-npm install cyclon-rtc-client --save
+npm install cyclon.p2p-rtc-client --save
 ```
 
 If you are using browserify and AngularJS in your project you can include the 'cyclon-rtc' module simply:
 
 ```javascript
-var cyclonRtc = require('cyclon-rtc-client');
+var cyclonRtc = require('cyclon.p2p-rtc-client');
 var angular = require('angular');  // or wherever angular comes from
 
 // Create the 'cyclon-rtc' module
