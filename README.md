@@ -1,12 +1,12 @@
-cyclon.p2p-rtc-client - A WebRTC abstraction layer
-==================================================
+cyclon.p2p-rtc-client
+=====================
 
 [![Build Status](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client.svg?branch=master)](https://travis-ci.org/nicktindall/cyclon.p2p-rtc-client)
 [![Dependencies](https://david-dm.org/nicktindall/cyclon.p2p-rtc-client.png)](https://david-dm.org/nicktindall/cyclon.p2p-rtc-client)
 
 The client component of a simple WebRTC abstraction layer.
 
-Written for use by the cyclon.p2p WebRTC communications module this abstraction features a simple API for establishing WebRTC data channels and sending and receiving data over them.
+Written for use by the [cyclon.p2p](https://github.com/nicktindall/cyclon.p2p) WebRTC [communications module](https://github.com/nicktindall/cyclon.p2p-rtc-comms) this abstraction features a simple API for establishing WebRTC data channels and sending and receiving data over them.
 
 How to use
 ----------
