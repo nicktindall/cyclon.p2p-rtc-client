@@ -18,19 +18,17 @@ describe('The RedundantSignallingSocket', function() {
 		},
 		SIGNALLING_SPEC_4 = {
 			signallingApiBase: "API_BASE_4"
-		},
-		ONE_MINUTE = 1000 * 60;
+		};
 
 	var signallingServerService,
 		socketFactory,
 		loggingService,
 		asyncExecService,
 		redundantSignallingSocket,
-		storage,
+        signallingServerSelector,
 		connectedServerSpecs,
 		connectedSockets,
 		connectivityCheckCallback,
-		timingService,
 		currentTime,
         signallingService;
 
@@ -42,11 +40,10 @@ describe('The RedundantSignallingSocket', function() {
 		socketFactory = ClientMocks.mockSocketFactory();
 		loggingService = ClientMocks.mockLoggingService();
 		asyncExecService = ClientMocks.mockAsyncExecService();
-		storage = ClientMocks.mockStorage();
-		timingService = ClientMocks.mockTimingService();
-        signallingService = ClientMocks.mockSignallingService();
+		signallingServerSelector = ClientMocks.mockSignallingServerSelector();
+		signallingService = ClientMocks.mockSignallingService();
 
-		redundantSignallingSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, storage, timingService);
+		redundantSignallingSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, signallingServerSelector);
 
 		socketFactory.createSocket.and.callFake(function(signallingSpec) {
 			connectedServerSpecs.push(signallingSpec);
@@ -58,14 +55,12 @@ describe('The RedundantSignallingSocket', function() {
 		});
 
 		// static signalling socket preferring 2 of 4 total signalling servers
-		signallingServerService.getSignallingServerSpecs.and.returnValue([SIGNALLING_SPEC_1, SIGNALLING_SPEC_2, SIGNALLING_SPEC_3, SIGNALLING_SPEC_4]);
 		signallingServerService.getPreferredNumberOfSockets.and.returnValue(2);
+        signallingServerSelector.getServerSpecsInPriorityOrder.and.returnValue([SIGNALLING_SPEC_1, SIGNALLING_SPEC_2, SIGNALLING_SPEC_3, SIGNALLING_SPEC_4]);
 
 		asyncExecService.setInterval.and.callFake(function(callback) {
 			connectivityCheckCallback = callback;
 		});
-
-		timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime);
 	});
 
 	describe('when connecting to initial server set', function() {
@@ -121,30 +116,6 @@ describe('The RedundantSignallingSocket', function() {
 				expect(offerEvent).toBe(OFFER_EVENT);
 			});
 		});
-
-		it('will prefer servers it was connected to previously', function() {
-			var inMemoryStorage = Utils.newInMemoryStorage();
-
-			var firstSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, inMemoryStorage, timingService);
-	 		firstSocket.connect(signallingService);
-
-			var secondSocket = new RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, inMemoryStorage, timingService);
-	 		secondSocket.connect(signallingService);
-
-			expect(sortSignallingServers(firstSocket.getCurrentServerSpecs()))
-	 			.toEqual(sortSignallingServers(secondSocket.getCurrentServerSpecs()));
-
-	 		function sortSignallingServers(serverSpecs) {
-	 			return serverSpecs.sort(function(itemOne, itemTwo) {
-					if(itemOne.signallingApiBase < itemTwo.signallingApiBase) {
-						return 1;
-					}
-					else {
-						return -1;
-					}
-	 			});
-	 		}
-	 	});
 	});
 
 	describe('when connected to a server set', function() {
@@ -153,49 +124,28 @@ describe('The RedundantSignallingSocket', function() {
 			redundantSignallingSocket.connect(signallingService);
 		});
 
-		it('will connect to a server it has not attempted to connect to upon disconnect', function() {
+		it('will flag disconnection from a server upon disconnect', function() {
 			connectedSockets[0].emit("disconnect");
-			//expect(connectedSockets.listenerCount()).toEqual(0);
-			expect(connectedServerSpecs.length).toEqual(3);
-			expect(connectedServerSpecs[2]).not.toEqual(connectedServerSpecs[0]);
-			expect(connectedServerSpecs[2]).not.toEqual(connectedServerSpecs[1]);
+            expect(signallingServerSelector.flagDisconnection(connectedSockets[0].signallingApiBase));
 		});
 
-		it('will connect to a server it has not attempted to connect to upon error', function() {
+		it('will flag disconnection from a server upon error', function() {
 			connectedSockets[0].emit("error");
-			expect(connectedServerSpecs.length).toEqual(3);
-			expect(connectedServerSpecs[2]).not.toEqual(connectedServerSpecs[0]);
-			expect(connectedServerSpecs[2]).not.toEqual(connectedServerSpecs[1]);
+            expect(signallingServerSelector.flagDisconnection(connectedSockets[0].signallingApiBase));
 		});
 
-		it('will connect to a server it has not attempted to connect to upon connect_error', function() {
+		it('will flag disconnection from a server upon connect_error', function() {
 			connectedSockets[0].io.emit("connect_error");
-			expect(connectedServerSpecs.length).toEqual(3);
-			expect(connectedServerSpecs[2]).not.toEqual(connectedServerSpecs[0]);
-			expect(connectedServerSpecs[2]).not.toEqual(connectedServerSpecs[1]);
+            expect(signallingServerSelector.flagDisconnection(connectedSockets[0].signallingApiBase))
 		});
 
-		it('will connect to the server it least recently disconnected from when reconnecting', function() {
-			connectedSockets[0].emit("disconnect");
+        it('connects to the next signalling server it is not already connected to as specified by the selector', function() {
+            signallingServerSelector.getServerSpecsInPriorityOrder.and.returnValue([SIGNALLING_SPEC_2, SIGNALLING_SPEC_3, SIGNALLING_SPEC_4]);
 
-			// A minute later...
-			timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime + ONE_MINUTE);
-			connectedSockets[1].emit("disconnect");
+            connectedSockets[0].emit("disconnect");
 
-			// Another minute later...
-			timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime + 2*ONE_MINUTE);
-			connectedSockets[2].emit("disconnect");
-
-			expect(connectedServerSpecs[4]).toEqual(connectedServerSpecs[0]);
-		});
-
-		it('will not attempt to connect to servers it disconnectedf from less than 30 seconds ago', function() {
-			connectedSockets[0].emit("disconnect");
-			connectedSockets[1].emit("disconnect");
-			connectedSockets[2].emit("disconnect");
-
-			expect(connectedServerSpecs.length).toEqual(4);
-		});
+            expect(connectedServerSpecs[2]).toEqual(SIGNALLING_SPEC_3);
+        });
 	});
 
 	describe('when executing connectivity checks', function() {
@@ -205,17 +155,14 @@ describe('The RedundantSignallingSocket', function() {
 		});
 
 		it('connects to an eligible server if the current number of connected servers is less than preferred', function() {
-			connectedSockets[0].emit("disconnect");
-			connectedSockets[1].emit("disconnect");
-			connectedSockets[2].emit("disconnect");
+            signallingServerSelector.getServerSpecsInPriorityOrder.and.returnValue([]);
+            connectedSockets[0].emit("disconnect");
+            expect(connectedServerSpecs.length).toEqual(2);
 
-			expect(connectedServerSpecs.length).toEqual(4);
-
-			timingService.getCurrentTimeInMilliseconds.and.returnValue(currentTime + 2 * ONE_MINUTE);
-			connectivityCheckCallback();
-
-			expect(connectedServerSpecs.length).toEqual(5);
-		});
+            signallingServerSelector.getServerSpecsInPriorityOrder.and.returnValue([SIGNALLING_SPEC_2, SIGNALLING_SPEC_3, SIGNALLING_SPEC_4]);
+            connectivityCheckCallback();
+            expect(connectedServerSpecs[2]).toEqual(SIGNALLING_SPEC_3);
+        });
 
 		it('updates the registration with the signalling servers', function() {
 			var firstSocketRegistered = false;

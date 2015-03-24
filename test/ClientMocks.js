@@ -63,6 +63,10 @@ module.exports.mockRtcPeerConnection = function () {
     return jasmine.createSpyObj('rtcPeerConnection', ['createDataChannel', 'createOffer', 'setLocalDescription', 'setRemoteDescription', 'createAnswer', 'addIceCandidate', 'close']);
 };
 
+module.exports.mockSignallingServerSelector = function() {
+    return jasmine.createSpyObj('signallingServerSelector', ['getServerSpecsInPriorityOrder', 'flagDisconnection', 'setLastConnectedServers', 'getLastConnectedServers']);
+};
+
 //
 // Success/failure callbacks for testing
 //

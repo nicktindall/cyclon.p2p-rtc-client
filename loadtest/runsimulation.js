@@ -43,13 +43,13 @@ staggeredStart();
 function createSignallingService() {
     var storage = Utils.newInMemoryStorage();
     var signallingServerService = new rtc.StaticSignallingServerService(SIGNALLING_SERVER);
+    var signallingServerSelector = new rtc.SignallingServerSelector(signallingServerService, storage, timingService, 5000);
     var signallingSocket = new rtc.RedundantSignallingSocket(
         signallingServerService,
         socketFactory,
         logger,
         Utils.asyncExecService(),
-        storage,
-        timingService);
+        signallingServerSelector);
 
     return new rtc.SocketIOSignallingService(
         signallingSocket,
