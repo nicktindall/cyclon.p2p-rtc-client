@@ -1,51 +1,50 @@
-'use strict';
-
-var Utils = require("cyclon.p2p-common");
+import {Logger} from 'cyclon.p2p-common';
+import {RTCObjectFactory} from './RTCObjectFactory';
 
 /**
  * An RTC Object factory that works in Firefox 37+ and Chrome 
  */
-function NativeRTCObjectFactory(logger) {
+export class NativeRTCObjectFactory implements RTCObjectFactory {
 
-    Utils.checkArguments(arguments, 1);
+    constructor(private readonly logger: Logger) {
+    }
 
-    this.createIceServers = function (urls, username, password) {
+    createIceServers(urls: string[], username: string, password: string): RTCIceServer {
         return {
             'urls': urls,
             'username': username,
-            'password': password
+            'credentialType': 'password',
+            'credential': password
         };
     };
 
-    this.createRTCSessionDescription = function (sessionDescriptionString) {
+    createRTCSessionDescription(sessionDescriptionString: RTCSessionDescriptionInit): RTCSessionDescription | null {
         if (typeof(RTCSessionDescription) !== "undefined") {
             return new RTCSessionDescription(sessionDescriptionString);
         }
         else {
-            logger.error("Your browser doesn't support WebRTC");
+            this.logger.error("Your browser doesn't support WebRTC");
             return null;
         }
     };
 
-    this.createRTCIceCandidate = function (rtcIceCandidateString) {
+    createRTCIceCandidate(rtcIceCandidateString: RTCIceCandidateInit): RTCIceCandidate | null {
         if (typeof(RTCIceCandidate) !== "undefined") {
             return new RTCIceCandidate(rtcIceCandidateString);
         }
         else {
-            logger.error("Your browser doesn't support WebRTC");
+            this.logger.error("Your browser doesn't support WebRTC");
             return null;
         }
     };
 
-    this.createRTCPeerConnection = function (config) {
+    createRTCPeerConnection(config: RTCConfiguration): RTCPeerConnection | null {
         if (typeof(RTCPeerConnection) !== "undefined") {
             return new RTCPeerConnection(config);
         }
         else {
-            logger.error("Your browser doesn't support WebRTC");
+            this.logger.error("Your browser doesn't support WebRTC");
             return null;
         }
     };
 }
-
-module.exports = NativeRTCObjectFactory;

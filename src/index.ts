@@ -9,7 +9,6 @@ var RedundantSignallingSocket = require("./RedundantSignallingSocket");
 var SocketIOSignallingService = require("./SocketIOSignallingService");
 var IceCandidateBatchingSignallingService = require("./IceCandidateBatchingSignallingService");
 var NativeRTCObjectFactory = require("./NativeRTCObjectFactory");
-var AdapterJsRTCObjectFactory = require("./AdapterJsRTCObjectFactory");
 var ChannelFactory = require("./ChannelFactory");
 var PeerConnectionFactory = require("./PeerConnectionFactory");
 var RTC = require("./rtc");
@@ -48,7 +47,6 @@ var DEFAULT_SIGNALLING_SERVER_RECONNECT_DELAY_MS = 5000;
 
 module.exports.RTC = RTC;
 module.exports.ChannelFactory = ChannelFactory;
-module.exports.AdapterJsRTCObjectFactory = AdapterJsRTCObjectFactory;
 module.exports.NativeRTCObjectFactory = NativeRTCObjectFactory;
 module.exports.NodeJsRTCObjectFactory = require("./NodeJsRTCObjectFactory");
 module.exports.TimingService = TimingService;
