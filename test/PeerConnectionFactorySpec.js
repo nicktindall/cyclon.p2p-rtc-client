@@ -1,7 +1,7 @@
 'use strict';
 
 var ClientMocks = require("./ClientMocks");
-var PeerConnectionFactory = require("../lib/PeerConnectionFactory");
+var PeerConnectionFactory = require("../src/PeerConnectionFactory");
 
 describe("The PeerConnectionFactory", function() {
 

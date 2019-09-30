@@ -2,7 +2,7 @@
 
 var Promise = require("bluebird");
 var events = require("events");
-var SocketIOSignallingService = require("../lib/SocketIOSignallingService");
+var SocketIOSignallingService = require("../src/SocketIOSignallingService");
 var ClientMocks = require("./ClientMocks");
 var UnreachableError = require("cyclon.p2p-common").UnreachableError;
 

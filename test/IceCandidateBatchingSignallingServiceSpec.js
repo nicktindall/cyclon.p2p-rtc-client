@@ -2,7 +2,7 @@
 
 var Promise = require("bluebird");
 var ClientMocks = require("./ClientMocks");
-var IceCandidateBatchingSignallingService = require("../lib/IceCandidateBatchingSignallingService");
+var IceCandidateBatchingSignallingService = require("../src/IceCandidateBatchingSignallingService");
 
 describe("The ICE candidate batching signalling service decorator", function() {
 

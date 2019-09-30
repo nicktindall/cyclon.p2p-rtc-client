@@ -3,7 +3,7 @@ var DELAY_BEFORE_RETRY_MS = 1000 * 5;
 var NOT_ENOUGH_TIME_TO_RETRY = DELAY_BEFORE_RETRY_MS - 10;
 var ENOUGH_TIME_TO_RETRY = DELAY_BEFORE_RETRY_MS + 10;
 var ClientMocks = require("./ClientMocks");
-var SignallingServerSelector = require("../lib/SignallingServerSelector");
+var SignallingServerSelector = require("../src/SignallingServerSelector");
 
 describe("SignallingServerSelector", function() {
 

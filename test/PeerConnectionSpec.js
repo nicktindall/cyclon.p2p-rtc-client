@@ -1,7 +1,7 @@
 'use strict';
 
 var Promise = require("bluebird");
-var PeerConnection = require("../lib/PeerConnection");
+var PeerConnection = require("../src/PeerConnection");
 var ClientMocks = require("./ClientMocks");
 
 describe("The peer connection", function () {

@@ -1,7 +1,7 @@
 'use strict';
 
 var ClientMocks = require("./ClientMocks");
-var Channel = require("../lib/Channel");
+var Channel = require("../src/Channel");
 var Promise = require("bluebird");
 var events = require("events");
 

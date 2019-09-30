@@ -21,20 +21,26 @@
     }
   ],
   "main": "lib/index.js",
+  "types": "lib/index.d.ts",
   "repository": {
     "type": "git",
     "url": "https://github.com/nicktindall/cyclon.p2p-rtc-client.git"
   },
   "scripts": {
-    "test": "make test"
+    "build": "tsc",
+    "test": "make test",
+    "clean": "make clean",
+    "prepare": "npm run build"
   },
   "devDependencies": {
+    "@types/node": "^12.7.8",
     "istanbul": "0.3.x",
-    "jasmine": "^2.99.0"
+    "jasmine": "^2.99.0",
+    "typescript": "^3.6.3"
   },
   "dependencies": {
     "bluebird": "2.3.x",
-    "cyclon.p2p-common": "^0.1.1",
+    "cyclon.p2p-common": "^0.1.6",
     "socket.io-client": "1.1.x"
   }
 }
