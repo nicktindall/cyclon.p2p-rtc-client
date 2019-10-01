@@ -1,28 +1,32 @@
-'use strict';
+import {Logger} from "cyclon.p2p-common";
+import {RTCObjectFactory} from "./RTCObjectFactory";
 
-var Utils = require("cyclon.p2p-common");
-var PeerConnection = require("./PeerConnection");
+const PeerConnection = require("./PeerConnection");
 
-function PeerConnectionFactory(rtcObjectFactory, logger, iceServers, channelStateTimeout) {
+export class PeerConnectionFactory {
 
-    Utils.checkArguments(arguments, 4);
+    constructor(private readonly rtcObjectFactory: RTCObjectFactory,
+                private readonly logger: Logger,
+                private readonly iceServers: RTCIceServer[],
+                private readonly channelStateTimeout: number) {
+    }
 
     /**
      * Create a new peer connection
      */
-    this.createPeerConnection = function () {
-        return new PeerConnection(rtcObjectFactory.createRTCPeerConnection(createPeerConnectionConfig()),
-            rtcObjectFactory, logger, channelStateTimeout);
-    };
+    createPeerConnection() {
+        return new PeerConnection(this.rtcObjectFactory.createRTCPeerConnection(this.createPeerConnectionConfig()),
+            this.rtcObjectFactory, this.logger, this.channelStateTimeout);
+    }
 
-    function createIceServers() {
-        if (iceServers) {
-            var builtIceServers = iceServers.map(function (iceServer) {
-                return rtcObjectFactory.createIceServers([].concat(iceServer.urls || iceServer.url), iceServer.username, iceServer.credential);
-            }).reduce(flatten, []).filter(notNull);     // createIceServer sometimes returns null (when the browser doesn't support the URL
+    private createIceServers() {
+        if (this.iceServers) {
+            const builtIceServers = this.iceServers.map((iceServer) => {
+                return this.rtcObjectFactory.createIceServers(Array.isArray(iceServer.urls) ? iceServer.urls : [iceServer.urls], iceServer.username, iceServer.credential);
+            }).reduce(PeerConnectionFactory.flatten, []).filter(PeerConnectionFactory.notNull);     // createIceServer sometimes returns null (when the browser doesn't support the URL
 
             if (builtIceServers.length === 0) {
-                logger.warn("Your browser doesn't support any of the configured ICE servers. You will only be able to contact other peers on your LAN.");
+                this.logger.warn("Your browser doesn't support any of the configured ICE servers. You will only be able to contact other peers on your LAN.");
             }
             return builtIceServers;
         }
@@ -30,19 +34,17 @@ function PeerConnectionFactory(rtcObjectFactory, logger, iceServers, channelStat
         return [];
     }
 
-    function createPeerConnectionConfig() {
-        var peerConnectionConfig = {};
-        peerConnectionConfig.iceServers = createIceServers();
-        return peerConnectionConfig;
+    private createPeerConnectionConfig() {
+        return {
+            iceServers: this.createIceServers()
+        };
     }
 
-    function notNull(item) {
+    private static notNull(item: any) {
         return item !== null;
     }
 
-    function flatten(prev, next) {
+    private static flatten(prev: any[], next: any[]) {
         return prev.concat(next);
     }
 }
-
-module.exports = PeerConnectionFactory;

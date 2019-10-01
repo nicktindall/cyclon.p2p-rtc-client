@@ -1,19 +1,25 @@
-const {checkArguments} = require("cyclon.p2p-common");
-const Channel = require("./Channel");
+import {Logger} from 'cyclon.p2p-common';
+import {SignallingService} from './SignallingService';
+import {CyclonNodePointer} from 'cyclon.p2p';
+import {Channel} from './Channel';
+import {PeerConnectionFactory} from "./PeerConnectionFactory";
 
-function ChannelFactory(peerConnectionFactory, signallingService, logger, channelStateTimeoutMs) {
+export class ChannelFactory {
 
-    checkArguments(arguments, 4);
+    constructor(private readonly peerConnectionFactory: PeerConnectionFactory,
+                private readonly signallingService: SignallingService,
+                private readonly logger: Logger,
+                private readonly channelStateTimeoutMs: number) {
+    }
 
-    this.createChannel = function (remotePeer, correlationId) {
+    createChannel(remotePeer: CyclonNodePointer, correlationId: number) {
         return new Channel(
             remotePeer,
             correlationId,
-            peerConnectionFactory.createPeerConnection(),
-            signallingService,
-            logger,
-            channelStateTimeoutMs);
+            this.peerConnectionFactory.createPeerConnection(),
+            this.signallingService,
+            this.logger,
+            this.channelStateTimeoutMs);
     }
 }
 
-module.exports = ChannelFactory;

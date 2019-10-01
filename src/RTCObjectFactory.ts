@@ -1,6 +1,6 @@
 export interface RTCObjectFactory {
 
-    createIceServers(urls: string[], username: string, password: string): RTCIceServer;
+    createIceServers(urls: string[] | string, username: string | undefined, password: string | undefined): RTCIceServer[];
 
     createRTCSessionDescription(sessionDescriptionString: RTCSessionDescriptionInit): RTCSessionDescription | null;
 
