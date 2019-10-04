@@ -1,7 +1,7 @@
 'use strict';
 
 var ClientMocks = require("./ClientMocks");
-var PeerConnectionFactory = require("../src/PeerConnectionFactory");
+var {PeerConnectionFactory} = require("../lib/PeerConnectionFactory");
 
 describe("The PeerConnectionFactory", function() {
 
@@ -12,7 +12,7 @@ describe("The PeerConnectionFactory", function() {
             "credential": "credential1"
         },
         {
-            "url": "url2",
+            "urls": "url2",
             "username": "username2",
             "credential": "credential2"
         }
@@ -50,7 +50,7 @@ describe("The PeerConnectionFactory", function() {
                 peerConnectionFactory.createPeerConnection();
 
                 expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith(ICE_SERVERS[0].urls, ICE_SERVERS[0].username, ICE_SERVERS[0].credential);
-                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith([ICE_SERVERS[1].url], ICE_SERVERS[1].username, ICE_SERVERS[1].credential);
+                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith([ICE_SERVERS[1].urls], ICE_SERVERS[1].username, ICE_SERVERS[1].credential);
                 expect(rtcObjectFactory.createRTCPeerConnection).toHaveBeenCalledWith({
                     iceServers: firstCreateIceServerResponse.concat(secondCreateIceServerResponse)
                 });
@@ -71,7 +71,7 @@ describe("The PeerConnectionFactory", function() {
                 peerConnectionFactory.createPeerConnection();
 
                 expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith(ICE_SERVERS[0].urls, ICE_SERVERS[0].username, ICE_SERVERS[0].credential);
-                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith([ICE_SERVERS[1].url], ICE_SERVERS[1].username, ICE_SERVERS[1].credential);
+                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith([ICE_SERVERS[1].urls], ICE_SERVERS[1].username, ICE_SERVERS[1].credential);
                 expect(rtcObjectFactory.createRTCPeerConnection).toHaveBeenCalledWith({
                     iceServers: secondCreateIceServerResponse
                 });

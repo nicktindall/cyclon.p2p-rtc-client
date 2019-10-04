@@ -1,7 +1,6 @@
-import {Logger} from "cyclon.p2p-common";
-import {RTCObjectFactory} from "./RTCObjectFactory";
-
-const PeerConnection = require("./PeerConnection");
+import {Logger} from 'cyclon.p2p-common';
+import {RTCObjectFactory} from './RTCObjectFactory';
+import {PeerConnection} from './PeerConnection';
 
 export class PeerConnectionFactory {
 
@@ -22,7 +21,7 @@ export class PeerConnectionFactory {
     private createIceServers() {
         if (this.iceServers) {
             const builtIceServers = this.iceServers.map((iceServer) => {
-                return this.rtcObjectFactory.createIceServers(Array.isArray(iceServer.urls) ? iceServer.urls : [iceServer.urls], iceServer.username, iceServer.credential);
+                return this.rtcObjectFactory.createIceServers(Array.isArray(iceServer.urls) ? iceServer.urls : [iceServer.urls], iceServer.username, iceServer.credential as string);
             }).reduce(PeerConnectionFactory.flatten, []).filter(PeerConnectionFactory.notNull);     // createIceServer sometimes returns null (when the browser doesn't support the URL
 
             if (builtIceServers.length === 0) {

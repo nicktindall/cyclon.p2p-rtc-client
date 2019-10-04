@@ -1,8 +1,8 @@
 import {Logger} from 'cyclon.p2p-common';
 import {SignallingService} from './SignallingService';
-import {CyclonNodePointer} from 'cyclon.p2p';
 import {Channel} from './Channel';
 import {PeerConnectionFactory} from "./PeerConnectionFactory";
+import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
 
 export class ChannelFactory {
 
@@ -12,7 +12,7 @@ export class ChannelFactory {
                 private readonly channelStateTimeoutMs: number) {
     }
 
-    createChannel(remotePeer: CyclonNodePointer, correlationId: number) {
+    createChannel(remotePeer: WebRTCCyclonNodePointer, correlationId?: number): Channel {
         return new Channel(
             remotePeer,
             correlationId,

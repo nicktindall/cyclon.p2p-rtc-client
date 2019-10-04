@@ -1,7 +1,7 @@
 'use strict';
 
 var Promise = require("bluebird");
-var PeerConnection = require("../src/PeerConnection");
+var {PeerConnection} = require("../lib/PeerConnection");
 var ClientMocks = require("./ClientMocks");
 
 describe("The peer connection", function () {
@@ -49,12 +49,8 @@ describe("The peer connection", function () {
         //
         rtcPeerConnection.createDataChannel.and.returnValue(rtcDataChannel);
 
-        rtcPeerConnection.setLocalDescription.and.callFake(function(sdp, success) {
-            setTimeout(success, 1);
-        });
-        rtcPeerConnection.setRemoteDescription.and.callFake(function(sdp, success) {
-            setTimeout(success, 1);
-        });
+        rtcPeerConnection.setLocalDescription.and.returnValue(Promise.delay(1));
+        rtcPeerConnection.setRemoteDescription.and.returnValue(Promise.delay(1));
         rtcObjectFactory.createRTCSessionDescription.and.callFake(function (sessionDescriptionString) {
             return remoteDescriptionFor(sessionDescriptionString);
         });
@@ -85,9 +81,7 @@ describe("The peer connection", function () {
         describe("and offer creation fails", function () {
 
             beforeEach(function () {
-                rtcPeerConnection.createOffer.and.callFake(function (success, failure) {
-                    failure();
-                });
+                rtcPeerConnection.createOffer.and.returnValue(Promise.reject());
             });
 
             it("calls reject", function (done) {
@@ -98,14 +92,12 @@ describe("The peer connection", function () {
         describe("and offer creation succeeds", function () {
 
             beforeEach(function (done) {
-                rtcPeerConnection.createOffer.and.callFake(function (successCallback) {
-                    successCallback(LOCAL_DESCRIPTION);
-                });
+                rtcPeerConnection.createOffer.and.returnValue(Promise.resolve(LOCAL_DESCRIPTION));
                 peerConnection.createOffer().then(done);
             });
 
             it("sets the local description", function () {
-                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION, jasmine.any(Function), jasmine.any(Function));
+                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION);
             });
 
             it('makes the local description available via the getter', function () {
@@ -116,12 +108,16 @@ describe("The peer connection", function () {
         describe("and cancel is called before it completes", function () {
 
             it("rejects with a cancellation error", function (done) {
+                rtcPeerConnection.createOffer.and.returnValue(Promise.defer().promise);
 
                 peerConnection.createOffer()
+                    .then(() => done.fail("Should have failed!"))
                     .catch(Promise.CancellationError,function () {
                         expect(rtcPeerConnection.createDataChannel).toHaveBeenCalledWith('cyclonShuffleChannel');
                         done();
-                    }).cancel();
+                    })
+                    .catch((e) => done.fail("Unexpected error" + e))
+                    .cancel();
             });
         });
     });
@@ -175,12 +171,14 @@ describe("The peer connection", function () {
     describe("when creating an answer", function () {
 
         it("will set the remote description", function (done) {
+            rtcPeerConnection.createAnswer.and.returnValue(Promise.defer().promise);
+
             peerConnection.createAnswer(REMOTE_DESCRIPTION)
                 .then(successCallback).catch(failureCallback);
 
             setTimeout(function () {
-                expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION), jasmine.any(Function), jasmine.any(Function));
-                expect(rtcPeerConnection.createAnswer).toHaveBeenCalledWith(jasmine.any(Function), jasmine.any(Function));
+                expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION));
+                expect(rtcPeerConnection.createAnswer).toHaveBeenCalledWith();
 
                 expect(successCallback).not.toHaveBeenCalled();
                 expect(failureCallback).not.toHaveBeenCalled();
@@ -192,24 +190,20 @@ describe("The peer connection", function () {
         describe("and answer creation succeeds", function () {
 
             beforeEach(function (done) {
-                rtcPeerConnection.createAnswer.and.callFake(function (successCallback) {
-                    successCallback(LOCAL_DESCRIPTION);
-                });
+                rtcPeerConnection.createAnswer.and.returnValue(Promise.resolve(LOCAL_DESCRIPTION));
 
                 peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES).then(done);
             });
 
             it("sets the local description", function () {
-                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION, jasmine.any(Function), jasmine.any(Function));
+                expect(rtcPeerConnection.setLocalDescription).toHaveBeenCalledWith(LOCAL_DESCRIPTION);
             });
         });
 
         describe("and answer creation fails", function () {
 
             beforeEach(function (done) {
-                rtcPeerConnection.createAnswer.and.callFake(function (success, failure) {
-                    failure();
-                });
+                rtcPeerConnection.createAnswer.and.returnValue(Promise.reject());
 
                 peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES).catch(done);
             });
@@ -222,8 +216,11 @@ describe("The peer connection", function () {
         describe("and cancel is called while it's in progress", function () {
 
             beforeEach(function (done) {
+                rtcPeerConnection.createAnswer.and.returnValue(Promise.defer().promise);
                 peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)
+                    .then(() => done.fail("Should not have succeeded"))
                     .catch(Promise.CancellationError, done)
+                    .catch((e) => done.fail("Unexpected error " + e))
                     .cancel();
             });
 
@@ -249,9 +246,7 @@ describe("The peer connection", function () {
     describe("when waiting for an open channel", function () {
 
         beforeEach(function (done) {
-            rtcPeerConnection.createOffer.and.callFake(function (success) {
-                success();
-            });
+            rtcPeerConnection.createOffer.and.returnValue(Promise.resolve());
             peerConnection.createOffer().then(done);
         });
 
@@ -303,7 +298,9 @@ describe("The peer connection", function () {
 
                 beforeEach(function (done) {
                     peerConnection.waitForChannelToOpen()
+                        .then(() => done.fail("Should have failed!"))
                         .catch(Promise.CancellationError, done)
+                        .catch((e) => done.fail("Unexpected error" + e))
                         .cancel();
                 });
 
@@ -352,18 +349,14 @@ describe("The peer connection", function () {
         });
 
         it("sets the remote description", function () {
-            expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION), jasmine.any(Function), jasmine.any(Function));
+            expect(rtcPeerConnection.setRemoteDescription).toHaveBeenCalledWith(remoteDescriptionFor(REMOTE_DESCRIPTION));
         });
     });
 
     describe("when processing remote ICE candidates", function() {
 
         beforeEach(function(done) {
-            rtcPeerConnection.createOffer.and.callFake(function(success) {
-                setTimeout(function() {
-                    success(LOCAL_DESCRIPTION);
-                }, 1);
-            });
+            rtcPeerConnection.createOffer.and.returnValue(Promise.delay(1, LOCAL_DESCRIPTION));
             peerConnection.createOffer().then(done);
         });
 
@@ -460,9 +453,7 @@ describe("The peer connection", function () {
         describe("and the last outstanding promise is completed", function() {
 
             beforeEach(function(done) {
-                rtcPeerConnection.createAnswer.and.callFake(function (successCallback) {
-                    successCallback(LOCAL_DESCRIPTION);
-                });
+                rtcPeerConnection.createAnswer.and.returnValue(Promise.resolve(LOCAL_DESCRIPTION));
 
                 peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)
                     .then(done)

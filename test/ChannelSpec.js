@@ -1,7 +1,7 @@
 'use strict';
 
 var ClientMocks = require("./ClientMocks");
-var Channel = require("../src/Channel");
+var {Channel} = require("../lib/Channel");
 var Promise = require("bluebird");
 var events = require("events");
 
@@ -121,7 +121,7 @@ describe("The Channel", function() {
 
 		it('delegates to the signalling service', function() {
 			expect(channel.sendAnswer()).toBe(sendAnswerResult);
-			expect(signallingService.sendAnswer).toHaveBeenCalledWith(REMOTE_PEER, CORRELATION_ID, LOCAL_DESCRIPTION, LOCAL_ICE_CANDIDATES);
+			expect(signallingService.sendAnswer).toHaveBeenCalledWith(REMOTE_PEER, CORRELATION_ID, LOCAL_DESCRIPTION);
 		});
 
 		it('sets the lastOutstandingPromise', function() {

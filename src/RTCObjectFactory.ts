@@ -2,9 +2,9 @@ export interface RTCObjectFactory {
 
     createIceServers(urls: string[] | string, username: string | undefined, password: string | undefined): RTCIceServer[];
 
-    createRTCSessionDescription(sessionDescriptionString: RTCSessionDescriptionInit): RTCSessionDescription | null;
+    createRTCSessionDescription(sessionDescriptionString: RTCSessionDescriptionInit): RTCSessionDescription;
 
-    createRTCIceCandidate(rtcIceCandidateString: RTCIceCandidateInit): RTCIceCandidate | null;
+    createRTCIceCandidate(rtcIceCandidateString: RTCIceCandidateInit): RTCIceCandidate;
 
-    createRTCPeerConnection(config: RTCConfiguration): RTCPeerConnection | null;
+    createRTCPeerConnection(config: RTCConfiguration): RTCPeerConnection;
 }

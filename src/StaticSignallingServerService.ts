@@ -1,17 +1,18 @@
-'use strict';
+import {SignallingServerSpec} from "./SignallingServerSpec";
 
 /**
  * Just returns a list of known signalling servers
  */
-function StaticSignallingServerService(signallingServers) {
-    
-    this.getSignallingServerSpecs = function () {
-        return signallingServers;
-    };
+export class StaticSignallingServerService {
 
-    this.getPreferredNumberOfSockets = function() {
-        return Math.min(2, signallingServers.length);
+    constructor(private readonly signallingServers: SignallingServerSpec[]) {
+    }
+
+    getSignallingServerSpecs(): SignallingServerSpec[] {
+        return this.signallingServers;
+    }
+
+    getPreferredNumberOfSockets(): number {
+        return Math.min(2, this.signallingServers.length);
     }
 }
-
-module.exports = StaticSignallingServerService;

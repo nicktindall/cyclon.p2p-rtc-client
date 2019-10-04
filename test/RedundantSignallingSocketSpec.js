@@ -1,8 +1,7 @@
 'use strict';
 
-var Utils = require("cyclon.p2p-common");
 var ClientMocks = require("./ClientMocks");
-var RedundantSignallingSocket = require("../src/RedundantSignallingSocket");
+var {RedundantSignallingSocket} = require("../lib/RedundantSignallingSocket");
 var events = require("events");
 
 describe('The RedundantSignallingSocket', function() {

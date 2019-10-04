@@ -1,19 +1,26 @@
-'use strict';
+import {SignallingServerService} from "./SignallingServerService";
+import {TimingService} from "./TimingService";
+import {SignallingServerSpec} from "./SignallingServerSpec";
 
-var Utils = require("cyclon.p2p-common");
-var LAST_CONNECTED_SERVERS_KEY = "CyclonJSLastConnectedServerList";
-var ANCIENT_TIMESTAMP_MILLISECONDS_SINCE_EPOCH = new Date("October 6, 1980 02:20:00").getTime();
+const LAST_CONNECTED_SERVERS_KEY = "CyclonJSLastConnectedServerList";
+const ANCIENT_TIMESTAMP_MILLISECONDS_SINCE_EPOCH = new Date("October 6, 1980 02:20:00").getTime();
 
-function SignallingServerSelector(signallingServerService, storage, timingService, delayBeforeRetryMilliseconds) {
+export class SignallingServerSelector {
 
-    Utils.checkArguments(arguments, 4);
+    private readonly randomSortValues: any;
+    private readonly lastDisconnectTimes: any;
 
-    var randomSortValues = {};
-    var lastDisconnectTimes = {};
+    constructor(private readonly signallingServerService: SignallingServerService,
+                private readonly storage: Storage,
+                private readonly timingService: TimingService,
+                private readonly delayBeforeRetryMilliseconds: number) {
+        this.randomSortValues = {};
+        this.lastDisconnectTimes = {};
+    }
 
-    this.getServerSpecsInPriorityOrder = function() {
-        return filterAndSortAvailableServers(signallingServerService.getSignallingServerSpecs());
-    };
+    getServerSpecsInPriorityOrder(): SignallingServerSpec[] {
+        return this.filterAndSortAvailableServers(this.signallingServerService.getSignallingServerSpecs());
+    }
 
     /**
      * Return a copy of the known server array sorted in the order of
@@ -21,20 +28,20 @@ function SignallingServerSelector(signallingServerService, storage, timingServic
      * considered a disconnect, this will cause servers to be tried in
      * a round robin pattern.
      */
-    function filterAndSortAvailableServers (serverArray) {
-        var copyOfServerArray = JSON.parse(JSON.stringify(serverArray));
-        copyOfServerArray.sort(function (itemOne, itemTwo) {
-            return sortValue(itemOne) - sortValue(itemTwo);
+    private filterAndSortAvailableServers(serverArray: SignallingServerSpec[]): SignallingServerSpec[] {
+        const copyOfServerArray: SignallingServerSpec[] = JSON.parse(JSON.stringify(serverArray));
+        copyOfServerArray.sort((itemOne: SignallingServerSpec, itemTwo: SignallingServerSpec) => {
+            return this.sortValue(itemOne) - this.sortValue(itemTwo);
         });
 
         // Filter servers we've too-recently disconnected from
-        return copyOfServerArray.filter(haveNotDisconnectedFromRecently);
+        return copyOfServerArray.filter((val: SignallingServerSpec) => this.haveNotDisconnectedFromRecently(val));
     }
 
-    function haveNotDisconnectedFromRecently(signallingServer) {
-        var lastDisconnectTime = lastDisconnectTimes[signallingServer.signallingApiBase];
+    private haveNotDisconnectedFromRecently(signallingServer: SignallingServerSpec) {
+        const lastDisconnectTime = this.lastDisconnectTimes[signallingServer.signallingApiBase];
         return lastDisconnectTime === undefined ||
-            timingService.getCurrentTimeInMilliseconds() - lastDisconnectTime > delayBeforeRetryMilliseconds;
+            this.timingService.getCurrentTimeInMilliseconds() - lastDisconnectTime > this.delayBeforeRetryMilliseconds;
     }
 
     /**
@@ -46,42 +53,42 @@ function SignallingServerSelector(signallingServerService, storage, timingServic
      *
      * @param serverSpec
      */
-    function sortValue (serverSpec) {
-        var signallingApiBase = serverSpec.signallingApiBase;
-        return lastDisconnectTimes[signallingApiBase] || getRandomSortValue(signallingApiBase);
+    private sortValue(serverSpec: SignallingServerSpec): number {
+        const signallingApiBase = serverSpec.signallingApiBase;
+        return this.lastDisconnectTimes[signallingApiBase] || this.getRandomSortValue(signallingApiBase);
     }
 
     /**
      * Generate a CONSISTENT (for a given signallingApiBase) random timestamp well in the past
      */
-    function getRandomSortValue (signallingApiBase) {
-        var value;
+    private getRandomSortValue (signallingApiBase: string) {
+        let value;
 
         // Prefer servers we were connected to before a reload
-        if (getLastConnectedServers().indexOf(signallingApiBase) >= 0) {
+        if (this.getLastConnectedServers().indexOf(signallingApiBase) >= 0) {
             return 0;
         }
 
-        if (randomSortValues.hasOwnProperty(signallingApiBase)) {
-            value = randomSortValues[signallingApiBase];
+        if (this.randomSortValues.hasOwnProperty(signallingApiBase)) {
+            value = this.randomSortValues[signallingApiBase];
         }
         else {
-            value = randomSortValues[signallingApiBase] = Math.floor(Math.random() * ANCIENT_TIMESTAMP_MILLISECONDS_SINCE_EPOCH);
+            value = this.randomSortValues[signallingApiBase] = Math.floor(Math.random() * ANCIENT_TIMESTAMP_MILLISECONDS_SINCE_EPOCH);
         }
         return value;
     }
 
-    this.flagDisconnection = function(apiBase) {
-        lastDisconnectTimes[apiBase] = timingService.getCurrentTimeInMilliseconds()
-    };
+    flagDisconnection(apiBase: string) {
+        this.lastDisconnectTimes[apiBase] = this.timingService.getCurrentTimeInMilliseconds()
+    }
 
     /**
      * Store the last connected signalling servers so they can be
      * re-connected to on a reload
      */
-    this.setLastConnectedServers = function(apiUrls) {
-        storage.setItem(LAST_CONNECTED_SERVERS_KEY, apiUrls);
-    };
+    setLastConnectedServers (apiUrls: string[]) {
+        this.storage.setItem(LAST_CONNECTED_SERVERS_KEY, JSON.stringify(apiUrls));
+    }
 
     /**
      * Gets the list of last connected servers (if available) from
@@ -89,10 +96,8 @@ function SignallingServerSelector(signallingServerService, storage, timingServic
      *
      * @returns {*}
      */
-    function getLastConnectedServers () {
-        var storedValue = storage.getItem(LAST_CONNECTED_SERVERS_KEY);
-        return storedValue || [];
+    getLastConnectedServers () {
+        const storedValue = this.storage.getItem(LAST_CONNECTED_SERVERS_KEY);
+        return storedValue ? JSON.parse(storedValue) : [];
     }
 }
-
-module.exports = SignallingServerSelector;

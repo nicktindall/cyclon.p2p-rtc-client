@@ -1,136 +1,146 @@
-var Promise = require("bluebird");
-var Utils = require("cyclon.p2p-common");
+import {Promise} from 'bluebird';
+import {Logger, BufferingEventEmitter} from 'cyclon.p2p-common';
+import {AnswerMessage, SignallingService} from './SignallingService';
+import {PeerConnection} from "./PeerConnection";
+import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
 
-function Channel(remotePeer, correlationId, peerConnection, signallingService, logger, channelStateTimeoutMs) {
+export class Channel {
 
-    Utils.checkArguments(arguments, 6);
+    private channelEstablishedEventEmitter:BufferingEventEmitter;
+    private messages: BufferingEventEmitter;
+    private resolvedCorrelationId?: number;
+    private channelType?: string;
+    private rtcDataChannel?: RTCDataChannel;
+    private lastOutstandingPromise?: Promise<any>;
 
-    var channelType = null;
-    var rtcDataChannel = null;
-    var messages = null;
-    var self = this;
-    var resolvedCorrelationId = correlationId;
-    var lastOutstandingPromise = null;
-    var channelEstablishedEventEmitter = new Utils.BufferingEventEmitter();
+    constructor(private readonly remotePeer: WebRTCCyclonNodePointer,
+                private readonly correlationId: number | undefined,
+                private peerConnection: PeerConnection,
+                private signallingService: SignallingService,
+                private readonly logger: Logger,
+                private readonly channelStateTimeoutMs: number) {
+        this.resolvedCorrelationId = correlationId;
+        this.channelEstablishedEventEmitter = new BufferingEventEmitter();
+        this.messages = new BufferingEventEmitter();
 
-    peerConnection.on("channelCreated", function (channel) {
-        rtcDataChannel = channel;
-        addMessageListener();
-        channelEstablishedEventEmitter.emit("channelEstablished");
-    });
-
-    function remoteCandidatesEventId() {
-        return "candidates-" + remotePeer.id + "-" + resolvedCorrelationId;
+        peerConnection.on("channelCreated", (channel: RTCDataChannel) => {
+            this.rtcDataChannel = channel;
+            this.addMessageListener();
+            this.channelEstablishedEventEmitter.emit("channelEstablished");
+        });
     }
 
-    function correlationIdIsResolved() {
-        return typeof (resolvedCorrelationId) == "number";
+    private remoteCandidatesEventId(): string {
+        return `candidates-${this.remotePeer.id}-${this.verifyCorrelationId()}`;
     }
 
-    function verifyCorrelationId() {
-        if (!correlationIdIsResolved()) {
+    private correlationIdIsResolved(): boolean {
+        return this.resolvedCorrelationId !== undefined;
+    }
+
+    private verifyCorrelationId(): number {
+        if (!this.correlationIdIsResolved()) {
             throw new Error("Correlation ID is not resolved");
         }
+        return this.resolvedCorrelationId as number;
     }
 
-    this.startListeningForRemoteIceCandidates = function () {
-        verifyCorrelationId();
+    startListeningForRemoteIceCandidates(): void {
+        this.verifyCorrelationId();
 
-        signallingService.on(remoteCandidatesEventId(), function (message) {
+        this.signallingService.on(this.remoteCandidatesEventId(), (message: any) => {
             try {
-                peerConnection.processRemoteIceCandidates(message.iceCandidates);
+                this.peerConnection.processRemoteIceCandidates(message.iceCandidates);
             } catch (error) {
-                logger.error("Error handling peer candidates", error);
+                this.logger.error("Error handling peer candidates", error);
             }
         });
-    };
+    }
 
-    this.getRemotePeer = function () {
-        return remotePeer;
-    };
+    getRemotePeer(): WebRTCCyclonNodePointer {
+        return this.remotePeer;
+    }
 
-    this.createOffer = function (type) {
-        channelType = type;
-        return peerConnection.createOffer();
-    };
+    createOffer(type: string): Promise<RTCSessionDescriptionInit> {
+        this.channelType = type;
+        return this.peerConnection.createOffer();
+    }
 
-    this.createAnswer = function (remoteDescription) {
-        return peerConnection.createAnswer(remoteDescription);
-    };
+    createAnswer(remoteDescription: RTCSessionDescriptionInit): Promise<void> {
+        return this.peerConnection.createAnswer(remoteDescription);
+    }
 
-    this.sendAnswer = function () {
-        verifyCorrelationId();
+    sendAnswer(): Promise<void> {
+        const correlationId = this.verifyCorrelationId();
 
-        lastOutstandingPromise = signallingService.sendAnswer(
-            remotePeer,
-            resolvedCorrelationId,
-            peerConnection.getLocalDescription(),
-            peerConnection.getLocalIceCandidates());
-        return lastOutstandingPromise;
-    };
+        this.lastOutstandingPromise = this.signallingService.sendAnswer(
+            this.remotePeer,
+            correlationId,
+            this.peerConnection.getLocalDescription());
+        return this.lastOutstandingPromise;
+    }
 
-    this.waitForChannelEstablishment = function () {
-        lastOutstandingPromise = new Promise(function (resolve) {
-            channelEstablishedEventEmitter.once('channelEstablished', function () {
-                resolve(self);
+    waitForChannelEstablishment(): Promise<Channel> {
+        this.lastOutstandingPromise = new Promise((resolve) => {
+            this.channelEstablishedEventEmitter.once('channelEstablished', () => {
+                resolve(this);
             });
-        }).timeout(channelStateTimeoutMs, "Data channel establishment timeout exceeded");
-        return lastOutstandingPromise;
-    };
+        }).timeout(this.channelStateTimeoutMs, "Data channel establishment timeout exceeded");
+        return this.lastOutstandingPromise;
+    }
 
-    this.startSendingIceCandidates = function () {
-        verifyCorrelationId();
+    startSendingIceCandidates(): void {
+        const correlationId = this.verifyCorrelationId();
 
-        peerConnection.on("iceCandidates", function (candidates) {
-            signallingService.sendIceCandidates(remotePeer, resolvedCorrelationId, candidates).catch(function (error) {
-                logger.warn("An error occurred sending ICE candidates to " + remotePeer.id, error);
+        this.peerConnection.on("iceCandidates", (candidates: RTCIceCandidate[]) => {
+            this.signallingService.sendIceCandidates(this.remotePeer, correlationId, candidates).catch((error) => {
+                this.logger.warn(`An error occurred sending ICE candidates to ${this.remotePeer.id}`, error);
             });
         });
-        peerConnection.startEmittingIceCandidates();
-    };
+        this.peerConnection.startEmittingIceCandidates();
+    }
 
-    this.stopSendingIceCandidates = function () {
-        peerConnection.removeAllListeners("iceCandidates");
-        return self;
-    };
+    stopSendingIceCandidates(): Channel {
+        this.peerConnection.removeAllListeners("iceCandidates");
+        return this;
+    }
 
-    this.sendOffer = function () {
-        lastOutstandingPromise = signallingService.sendOffer(
-            remotePeer,
-            channelType,
-            peerConnection.getLocalDescription())
-            .then(function (correlationId) {
-                resolvedCorrelationId = correlationId;
+    sendOffer(): Promise<void> {
+        this.lastOutstandingPromise = this.signallingService.sendOffer(
+            this.remotePeer,
+            this.channelType as string,
+            this.peerConnection.getLocalDescription())
+            .then((correlationId) => {
+                this.resolvedCorrelationId = correlationId;
             });
-        return lastOutstandingPromise;
-    };
+        return this.lastOutstandingPromise as Promise<void>;
+    }
 
-    this.waitForAnswer = function () {
-        lastOutstandingPromise = signallingService.waitForAnswer(resolvedCorrelationId);
-        return lastOutstandingPromise;
-    };
+    waitForAnswer(): Promise<AnswerMessage> {
+        this.lastOutstandingPromise = this.signallingService.waitForAnswer(this.verifyCorrelationId());
+        return this.lastOutstandingPromise as Promise<AnswerMessage>;
+    }
 
-    this.handleAnswer = function (answerMessage) {
-        return peerConnection.handleAnswer(answerMessage);
-    };
+    handleAnswer(answerMessage: AnswerMessage): Promise<void> {
+        return this.peerConnection.handleAnswer(answerMessage);
+    }
 
-    this.waitForChannelToOpen = function () {
-        return peerConnection.waitForChannelToOpen();
-    };
+    waitForChannelToOpen(): Promise<RTCDataChannel> {
+        return this.peerConnection.waitForChannelToOpen();
+    }
 
-    function addMessageListener() {
-        messages = new Utils.BufferingEventEmitter();
-        rtcDataChannel.onmessage = function (messageEvent) {
-            const parsedMessage = parseMessage(messageEvent.data);
-            messages.emit(parsedMessage.type, parsedMessage.payload);
+    private addMessageListener(): void {
+        (this.rtcDataChannel as RTCDataChannel).onmessage = (messageEvent) => {
+            const parsedMessage = this.parseMessage(messageEvent.data as string);
+            this.messages.emit(parsedMessage.type, parsedMessage.payload);
         };
     }
 
-    function parseMessage(message) {
+    private parseMessage(message: string): ChannelMessage {
         try {
             return JSON.parse(message);
         } catch (e) {
-            throw new Error("Bad message received from " + remotePeer.id + " : '" + message + "'");
+            throw new Error("Bad message received from " + this.remotePeer.id + " : '" + message + "'");
         }
     }
 
@@ -140,19 +150,19 @@ function Channel(remotePeer, correlationId, peerConnection, signallingService, l
      * @param type the type of message to send
      * @param message The message to send
      */
-    this.send = function (type, message) {
-        if (rtcDataChannel === null) {
+    send(type: string, message: any) {
+        if (this.rtcDataChannel === undefined) {
             throw new Error("Data channel has not yet been established!");
         }
-        var channelState = String(rtcDataChannel.readyState);
+        const channelState = String(this.rtcDataChannel.readyState);
         if ("open" !== channelState) {
-            throw new Error("Data channel must be in 'open' state to send messages (actual state: " + channelState + ")");
+            throw new Error(`Data channel must be in 'open' state to send messages (actual state: ${channelState})`);
         }
-        rtcDataChannel.send(JSON.stringify({
+        this.rtcDataChannel.send(JSON.stringify({
             type: type,
             payload: message || {}
         }));
-    };
+    }
 
     /**
      * Wait an amount of time for a particular type of message on a data channel
@@ -160,63 +170,70 @@ function Channel(remotePeer, correlationId, peerConnection, signallingService, l
      * @param messageType
      * @param timeoutInMilliseconds
      */
-    this.receive = function (messageType, timeoutInMilliseconds) {
-        var handlerFunction = null;
+    receive(messageType: string, timeoutInMilliseconds: number) {
+        let handlerFunction: (... args: any[]) => void;
 
-        lastOutstandingPromise = new Promise(function (resolve, reject) {
+        this.lastOutstandingPromise = new Promise((resolve, reject) => {
 
-            if (rtcDataChannel === null || "open" !== String(rtcDataChannel.readyState)) {
-                reject(new Error("Data channel must be in 'open' state to receive " + messageType + " message"));
+            if (this.rtcDataChannel === undefined || "open" !== String(this.rtcDataChannel.readyState)) {
+                reject(new Error(`Data channel must be in 'open' state to receive ${messageType} message`));
             }
 
             //
             // Add the handler
             //
-            handlerFunction = function (message) {
+            handlerFunction = (message: string): void => {
                 resolve(message);
             };
 
-            messages.once(messageType, handlerFunction);
+            this.messages.once(messageType, handlerFunction);
         })
-        .timeout(timeoutInMilliseconds, "Timeout reached waiting for '" + messageType + "' message (from " + remotePeer.id + ")")
-        .catch(Promise.TimeoutError, Promise.CancellationError, function (e) {
-            //
-            // If cancel or timeout occurs, remove the message listener
-            //
-            messages.removeListener(messageType, handlerFunction);
+        .timeout(timeoutInMilliseconds, "Timeout reached waiting for '" + messageType + "' message (from " + this.remotePeer.id + ")")
+        //
+        // If cancel or timeout occurs, remove the message listener
+        //
+        .catch(Promise.TimeoutError, (e) => {
+            this.messages.removeListener(messageType, handlerFunction);
+            throw e;
+        })
+        .catch(Promise.CancellationError, (e) => {
+            this.messages.removeListener(messageType, handlerFunction);
             throw e;
         });
 
-        return lastOutstandingPromise;
-    };
+        return this.lastOutstandingPromise;
+    }
 
-    this.cancel = function () {
-        if (lastOutstandingPromise !== null && lastOutstandingPromise.isPending()) {
-            lastOutstandingPromise.cancel();
+    cancel() {
+        if (this.lastOutstandingPromise && this.lastOutstandingPromise.isPending()) {
+            this.lastOutstandingPromise.cancel();
         }
-    };
+    }
 
-    this.close = function () {
-        if (signallingService !== null) {
-            if (correlationIdIsResolved()) {
-                signallingService.removeAllListeners(remoteCandidatesEventId());
+    close() {
+        if (this.signallingService !== undefined) {
+            if (this.correlationIdIsResolved()) {
+                this.signallingService.removeAllListeners(this.remoteCandidatesEventId());
             }
-            signallingService = null;
+            delete this.signallingService;
         }
 
-        if (messages !== null) {
-            messages.removeAllListeners();
-            messages = null;
+        if (this.messages !== undefined) {
+            this.messages.removeAllListeners();
+            delete this.messages;
         }
 
-        if (peerConnection) {
-            peerConnection.removeAllListeners();
-            peerConnection.close();
-            peerConnection = null;
+        if (this.peerConnection !== undefined) {
+            this.peerConnection.removeAllListeners();
+            this.peerConnection.close();
+            delete this.peerConnection;
         }
 
-        rtcDataChannel = null;
+        delete this.rtcDataChannel;
     };
 }
 
-module.exports = Channel;
+interface ChannelMessage {
+    type: string;
+    payload: any;
+}

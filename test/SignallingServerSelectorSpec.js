@@ -3,7 +3,7 @@ var DELAY_BEFORE_RETRY_MS = 1000 * 5;
 var NOT_ENOUGH_TIME_TO_RETRY = DELAY_BEFORE_RETRY_MS - 10;
 var ENOUGH_TIME_TO_RETRY = DELAY_BEFORE_RETRY_MS + 10;
 var ClientMocks = require("./ClientMocks");
-var SignallingServerSelector = require("../src/SignallingServerSelector");
+var {SignallingServerSelector} = require("../lib/SignallingServerSelector");
 
 describe("SignallingServerSelector", function() {
 
@@ -69,6 +69,6 @@ describe("SignallingServerSelector", function() {
     it('will write last connected servers to storage', function() {
         signallingServerSelector.setLastConnectedServers(["aaa", "bbb"]);
 
-        expect(storage.setItem).toHaveBeenCalledWith("CyclonJSLastConnectedServerList", ["aaa", "bbb"]);
+        expect(storage.setItem).toHaveBeenCalledWith("CyclonJSLastConnectedServerList", JSON.stringify(["aaa", "bbb"]));
     });
 });

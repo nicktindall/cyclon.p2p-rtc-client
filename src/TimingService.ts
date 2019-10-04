@@ -1,10 +1,6 @@
-'use strict';
+export class TimingService {
 
-function TimingService() {
-
-    this.getCurrentTimeInMilliseconds = function () {
+    getCurrentTimeInMilliseconds(): number {
         return new Date().getTime();
-    };
+    }
 }
-
-module.exports = TimingService;

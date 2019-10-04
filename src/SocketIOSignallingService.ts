@@ -1,53 +1,65 @@
-'use strict';
+import {Promise} from 'bluebird';
+import url from 'url';
+import {MetadataProvider} from 'cyclon.p2p';
+import {BufferingEventEmitter, generateGuid, Logger, shuffleArray, UnreachableError} from 'cyclon.p2p-common';
+import {HttpRequestService} from "./HttpRequestService";
+import {SignallingSocket} from "./SignallingSocket";
+import {AnswerMessage, IceCandidatesMessage, SignallingMessage, SignallingService} from "./SignallingService";
+import {SignallingServerSpec} from "./SignallingServerSpec";
+import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
 
-var RTC_LOCAL_ID_STORAGE_KEY = "cyclon-rtc-local-node-id";
-var POINTER_SEQUENCE_STORAGE_KEY = "cyclon-rtc-pointer-sequence-counter";
+const POINTER_SEQUENCE_STORAGE_KEY = "cyclon-rtc-pointer-sequence-counter";
+const RTC_LOCAL_ID_STORAGE_KEY = "cyclon-rtc-local-node-id";
 
-var BufferingEventEmitter = require("cyclon.p2p-common").BufferingEventEmitter;
-var Promise = require("bluebird");
-var url = require('url');
-var Utils = require("cyclon.p2p-common");
+export class SocketIOSignallingService implements SignallingService {
 
-function SocketIOSignallingService (signallingSocket, logger, httpRequestService, storage) {
+    private localId?: string;
+    private correlationIdCounter: number;
+    private answerEmitter: BufferingEventEmitter;
+    private eventEmitter: BufferingEventEmitter;
+    private pointerCounter: number;
+    private metadataProviders: { [key: string]: MetadataProvider };
 
-    Utils.checkArguments(arguments, 4);
+    constructor(private readonly signallingSocket: SignallingSocket,
+                private readonly logger: Logger,
+                private readonly httpRequestService: HttpRequestService,
+                private readonly storage: Storage) {
+        this.correlationIdCounter = 0;
+        this.pointerCounter = 0;
+        this.metadataProviders = {};
+        this.eventEmitter = new BufferingEventEmitter();
+        this.answerEmitter = new BufferingEventEmitter();
 
-    var localId = null;
-    var correlationIdCounter = 0;
-    var answerEmitter = new BufferingEventEmitter();
-    var eventEmitter = new BufferingEventEmitter();
-    var pointerCounter = 0;
-    var metadataProviders = {};
+        // Listen for signalling messages
+        signallingSocket.on("answer", (message: SignallingMessage) => {
+            logger.debug(`Answer received from: ${message.sourceId} (correlationId ${message.correlationId})`);
+            this.answerEmitter.emit(`answer-${message.correlationId}`, message);
+        });
+        signallingSocket.on("offer", (message: SignallingMessage) => {
+            logger.debug(`Offer received from: ${message.sourceId} (correlationId ${message.correlationId})`);
+            this.eventEmitter.emit("offer", message);
+        });
+        signallingSocket.on("candidates", (message: IceCandidatesMessage) => {
+            logger.debug(`${message.iceCandidates.length} ICE Candidates received from: ${message.sourceId} (correlationId ${message.correlationId})`);
+            this.eventEmitter.emit(`candidates-${message.sourceId}-${message.correlationId}`, message);
+        });
+    }
 
-    // Listen for signalling messages
-    signallingSocket.on("answer", function(message) {
-        logger.debug("Answer received from: " + message.sourceId + " (correlationId " + message.correlationId + ")");
-        answerEmitter.emit("answer-" + message.correlationId, message);
-    });
-    signallingSocket.on("offer", function (message) {
-        logger.debug("Offer received from: " + message.sourceId + " (correlationId " + message.correlationId + ")");
-        eventEmitter.emit("offer", message);
-    });
-    signallingSocket.on("candidates", function (message) {
-        logger.debug(message.iceCandidates.length + " ICE Candidates received from: " + message.sourceId + " (correlationId " + message.correlationId + ")");
-        eventEmitter.emit("candidates-" + message.sourceId + "-" + message.correlationId, message);
-    });
+    on(eventType: string, handler: (... args: any[]) => void): void {
+        this.eventEmitter.on(eventType, handler);
+    }
 
-    this.on = function (eventType, handler) {
-        eventEmitter.on(eventType, handler);
-    };
-
-    this.removeAllListeners = function(eventType) {
-        eventEmitter.removeAllListeners(eventType);
-    };
+    removeAllListeners(eventType: string) {
+        this.eventEmitter.removeAllListeners(eventType);
+    }
 
     /**
      * Connect to the signalling server(s)
      */
-    this.connect = function (sessionMetadataProviders, rooms) {
-        metadataProviders = sessionMetadataProviders || {};
-        signallingSocket.connect(this, rooms);
-    };
+    connect(sessionMetadataProviders: { [key: string]: MetadataProvider }, rooms: string[]) {
+        this.metadataProviders = sessionMetadataProviders || {};
+        this.signallingSocket.connect(this, rooms);
+    }
 
     /**
      * Send an offer message over the signalling channel
@@ -56,13 +68,13 @@ function SocketIOSignallingService (signallingSocket, logger, httpRequestService
      * @param type
      * @param sessionDescription
      */
-    this.sendOffer = function (destinationNode, type, sessionDescription) {
-        logger.debug("Sending offer SDP to " + destinationNode.id);
+    sendOffer(destinationNode: WebRTCCyclonNodePointer, type: string, sessionDescription: RTCSessionDescription) {
+        this.logger.debug(`Sending offer SDP to ${destinationNode.id}`);
 
-        var correlationId = correlationIdCounter++;
-        var localPointer = this.createNewPointer();
+        const correlationId = this.correlationIdCounter++;
+        const localPointer = this.createNewPointer();
 
-        return postToFirstAvailableServer(destinationNode, randomiseServerOrder(destinationNode), "./api/offer", {
+        return this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/offer", {
             channelType: type,
             sourceId: localPointer.id,
             correlationId: correlationId,
@@ -73,77 +85,78 @@ function SocketIOSignallingService (signallingSocket, logger, httpRequestService
         .then(function() {
             return correlationId;
         });
-    };
+    }
 
-    this.waitForAnswer = function (correlationId) {
-        return new Promise(function(resolve) {
-            answerEmitter.once("answer-" + correlationId, function(answer) {
+    waitForAnswer(correlationId: number): Promise<AnswerMessage> {
+        return new Promise((resolve) => {
+            this.answerEmitter.once("answer-" + correlationId, (answer: AnswerMessage) => {
                 resolve(answer);
             });
         })
         .cancellable()
-        .catch(Promise.CancellationError, function(e) {
-            logger.warn("Clearing wait listener for correlation ID " + correlationId);
-            answerEmitter.removeAllListeners("answer-" + correlationId);
+        .catch(Promise.CancellationError, (e: Promise.CancellationError) => {
+            this.logger.warn("Clearing wait listener for correlation ID " + correlationId);
+            this.answerEmitter.removeAllListeners("answer-" + correlationId);
             throw e;
-        });
+        }) as Promise<AnswerMessage>;
     };
 
     /**
      * Create a new pointer to this RTC node
      */
-    this.createNewPointer = function () {
-        var pointer = {
+    createNewPointer(): WebRTCCyclonNodePointer {
+        const pointer: WebRTCCyclonNodePointer = {
             id: this.getLocalId(),
             age: 0,
-            seq: getNextPointerSequenceNumber(),
-            metadata: {}
+            seq: this.getNextPointerSequenceNumber(),
+            metadata: {},
+            signalling: []
         };
 
-        if (metadataProviders) {
-            for (var metaDataKey in metadataProviders) {
+        if (this.metadataProviders) {
+            for (const metaDataKey in this.metadataProviders) {
                 try {
-                    pointer.metadata[metaDataKey] = metadataProviders[metaDataKey]();
+                    pointer.metadata[metaDataKey] = this.metadataProviders[metaDataKey]();
                 }
                 catch(e) {
-                    logger.error("An error occurred generating metadata (key: " + metaDataKey + ")", e);
+                    this.logger.error(`An error occurred generating metadata (key: ${metaDataKey}`, e);
                 }
             }
         }
 
         // Populate current signalling details
-        pointer.signalling = signallingSocket.getCurrentServerSpecs();
+        pointer.signalling = this.signallingSocket.getCurrentServerSpecs();
         return pointer;
     };
 
     /**
      * Get the next pointer sequence number (restoring from storage if it's present)
      */
-    function getNextPointerSequenceNumber () {
-        if (pointerCounter === 0) {
-            var storedSequenceNumber = storage.getItem(POINTER_SEQUENCE_STORAGE_KEY);
-            pointerCounter = typeof(storedSequenceNumber) === "number" ? storedSequenceNumber : 0;
+    private getNextPointerSequenceNumber() {
+        if (this.pointerCounter === 0) {
+            const storedSequenceNumber = this.storage.getItem(POINTER_SEQUENCE_STORAGE_KEY);
+            this.pointerCounter = storedSequenceNumber !== null ? parseInt(storedSequenceNumber) : 0;
         }
-        var returnValue = pointerCounter++;
-        storage.setItem(POINTER_SEQUENCE_STORAGE_KEY, pointerCounter);
+        const returnValue = this.pointerCounter++;
+        this.storage.setItem(POINTER_SEQUENCE_STORAGE_KEY, this.pointerCounter.toString());
         return returnValue;
     }
 
     /**
         Get the local node ID
     */
-    this.getLocalId = function () {
-        if(localId === null) {
-            var storedId = storage.getItem(RTC_LOCAL_ID_STORAGE_KEY);
+    getLocalId(): string {
+        if(this.localId === undefined) {
+            const storedId = this.storage.getItem(RTC_LOCAL_ID_STORAGE_KEY);
             if(storedId !== null) {
-                localId = storedId;
+                this.localId = storedId;
             }
             else {
-                localId = Utils.generateGuid();
-                storage.setItem(RTC_LOCAL_ID_STORAGE_KEY, localId);
+                this.localId = generateGuid();
+                this.storage.setItem(RTC_LOCAL_ID_STORAGE_KEY, this.localId as string);
             }
         }
-        return localId;
+        return this.localId as string;
     };
 
     /**
@@ -153,10 +166,10 @@ function SocketIOSignallingService (signallingSocket, logger, httpRequestService
      * @param correlationId
      * @param sessionDescription
      */
-    this.sendAnswer = function (destinationNode, correlationId, sessionDescription) {
-        logger.debug("Sending answer SDP to " + destinationNode.id);
+    sendAnswer(destinationNode: WebRTCCyclonNodePointer, correlationId: number, sessionDescription: RTCSessionDescription): Promise<void> {
+        this.logger.debug(`Sending answer SDP to ${destinationNode.id}`);
 
-        return postToFirstAvailableServer(destinationNode, randomiseServerOrder(destinationNode), "./api/answer", {
+        return this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/answer", {
             sourceId: this.getLocalId(),
             correlationId: correlationId,
             destinationId: destinationNode.id,
@@ -167,12 +180,12 @@ function SocketIOSignallingService (signallingSocket, logger, httpRequestService
     /**
      * Send an array of one or more ICE candidates
      */
-    this.sendIceCandidates = function (destinationNode, correlationId, iceCandidates) {
-        iceCandidates.forEach(function(candidate) {
-            logger.debug("Sending ice candidate: " + candidate.candidate + " to " + destinationNode.id);
+    sendIceCandidates(destinationNode: WebRTCCyclonNodePointer, correlationId: number, iceCandidates: RTCIceCandidate[]) {
+        iceCandidates.forEach((candidate: RTCIceCandidate) => {
+            this.logger.debug(`Sending ice candidate: ${candidate.candidate} to ${destinationNode.id}`);
         });
 
-        return postToFirstAvailableServer(destinationNode, randomiseServerOrder(destinationNode), "./api/candidates", {
+        return this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/candidates", {
             sourceId: this.getLocalId(),
             correlationId: correlationId,
             destinationId: destinationNode.id,
@@ -189,33 +202,31 @@ function SocketIOSignallingService (signallingSocket, logger, httpRequestService
      * @param message
      * @returns {Promise}
      */
-    function postToFirstAvailableServer (destinationNode, signallingServers, path, message) {
+    private postToFirstAvailableServer(destinationNode: WebRTCCyclonNodePointer, signallingServers: SignallingServerSpec[], path: string, message: any): Promise<void> {
 
-        return new Promise(function (resolve, reject) {
+        return new Promise((resolve, reject) => {
             if (signallingServers.length === 0) {
-                reject(new Utils.UnreachableError(createUnreachableErrorMessage(destinationNode)));
+                reject(new UnreachableError(SocketIOSignallingService.createUnreachableErrorMessage(destinationNode)));
             }
             else {
                 //noinspection JSCheckFunctionSignatures
-                httpRequestService.post(url.resolve(signallingServers[0].signallingApiBase, path), message)
+                this.httpRequestService.post(url.resolve(signallingServers[0].signallingApiBase, path), message)
                     .then(resolve)
-                    .catch(function (error) {
-                        logger.warn("An error occurred sending signalling message using " + signallingServers[0].signallingApiBase + " trying next signalling server", error);
-                        postToFirstAvailableServer(destinationNode, signallingServers.slice(1), path, message).then(resolve, reject);
+                    .catch((error: Error) => {
+                        this.logger.warn(`An error occurred sending signalling message using ${signallingServers[0].signallingApiBase} trying next signalling server`, error);
+                        this.postToFirstAvailableServer(destinationNode, signallingServers.slice(1), path, message).then(resolve, reject);
                     });
             }
         });
     }
 
-    function createUnreachableErrorMessage(destinationNode) {
-        return "Unable to contact node " + destinationNode.id + " using signalling servers: " + JSON.stringify(destinationNode.signalling.map(function (server) {
+    private static createUnreachableErrorMessage(destinationNode: WebRTCCyclonNodePointer) {
+        return `Unable to contact node ${destinationNode.id} using signalling servers: ${JSON.stringify(destinationNode.signalling.map(function (server: SignallingServerSpec) {
             return server.signallingApiBase
-        }));
+        }))}`;
     }
 
-    function randomiseServerOrder(destinationNode) {
-        return Utils.shuffleArray(destinationNode.signalling.slice(0));
+    private static randomiseServerOrder(destinationNode: WebRTCCyclonNodePointer) {
+        return shuffleArray(destinationNode.signalling.slice(0));
     }
 }
-
-module.exports = SocketIOSignallingService;

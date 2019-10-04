@@ -33,15 +33,17 @@
     "prepare": "npm run build"
   },
   "devDependencies": {
-    "@types/node": "^12.7.8",
     "istanbul": "0.3.x",
     "jasmine": "^2.99.0",
     "typescript": "^3.6.3"
   },
   "dependencies": {
+    "@types/bluebird": "^2.0.33",
+    "@types/node": "^10.14.19",
+    "@types/socket.io-client": "^1.4.32",
     "bluebird": "2.3.x",
-    "cyclon.p2p": "^0.1.12",
-    "cyclon.p2p-common": "^0.1.6",
+    "cyclon.p2p": "^0.1.17",
+    "cyclon.p2p-common": "^0.1.8",
     "socket.io-client": "1.1.x"
   }
 }

@@ -1,7 +1,8 @@
-'use strict';
-
-var Utils = require("cyclon.p2p-common");
-var Promise = require("bluebird");
+import {Promise} from 'bluebird';
+import {AsyncExecService, Logger} from "cyclon.p2p-common";
+import {AnswerMessage, SignallingService} from "./SignallingService";
+import {MetadataProvider} from "cyclon.p2p";
+import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
 
 /**
  * A decorator for a signalling service that batches ICE candidate messages to
@@ -12,114 +13,122 @@ var Promise = require("bluebird");
  * @param batchingDelayMs
  * @constructor
  */
-function IceCandidateBatchingSignallingService(asyncExecService, signallingService, batchingDelayMs) {
+export class IceCandidateBatchingSignallingService implements SignallingService {
 
-    Utils.checkArguments(arguments, 3);
+    private queuedCandidates: any;
+    private deliveryPromises: any;
 
-    var queuedCandidates = {};
-    var deliveryPromises = {};
+    constructor(private readonly asyncExecService: AsyncExecService,
+                private readonly signallingService: SignallingService,
+                private readonly batchingDelayMs: number,
+                private readonly logger: Logger) {
+        this.queuedCandidates = {};
+        this.deliveryPromises = {};
+    }
 
-    this.on = function () {
-        return signallingService.on.apply(signallingService, arguments);
-    };
+    on(eventType: string, handler: Function): void {
+        this.signallingService.on(eventType, handler);
+    }
 
-    this.removeAllListeners = function () {
-        return signallingService.removeAllListeners.apply(signallingService, arguments);
-    };
+    removeAllListeners(eventType?: string): void {
+        this.signallingService.removeAllListeners(eventType);
+    }
 
-    this.connect = function () {
-        return signallingService.connect.apply(signallingService, arguments);
-    };
+    connect(metadataProviders: { [key: string]: MetadataProvider }, rooms: string[]): void {
+        this.signallingService.connect(metadataProviders, rooms);
+    }
 
-    this.sendOffer = function () {
-        return signallingService.sendOffer.apply(signallingService, arguments);
-    };
+    sendOffer(destinationNode: WebRTCCyclonNodePointer, type: string, sessionDescription: RTCSessionDescriptionInit): Promise<number> {
+        return this.signallingService.sendOffer(destinationNode, type, sessionDescription);
+    }
 
-    this.waitForAnswer = function (correlationId) {
-        return signallingService.waitForAnswer.apply(signallingService, arguments);
-    };
+    waitForAnswer(correlationId: number): Promise<AnswerMessage> {
+        return this.signallingService.waitForAnswer(correlationId);
+    }
 
-    this.createNewPointer = function () {
-        return signallingService.createNewPointer.apply(signallingService, arguments);
-    };
+    createNewPointer(): WebRTCCyclonNodePointer {
+        return this.signallingService.createNewPointer();
+    }
 
-    this.getLocalId = function () {
-        return signallingService.getLocalId.apply(signallingService, arguments);
-    };
+    getLocalId(): string {
+        return this.signallingService.getLocalId();
+    }
 
-    this.sendAnswer = function () {
-        return signallingService.sendAnswer.apply(signallingService, arguments);
-    };
+    sendAnswer(destinationNode: WebRTCCyclonNodePointer, correlationId: number, sessionDescription: RTCSessionDescriptionInit): Promise<void> {
+        return this.signallingService.sendAnswer(destinationNode, correlationId, sessionDescription);
+    }
 
-    this.sendIceCandidates = function (destinationNode, correlationId, iceCandidates) {
-        var newQueue = iceCandidates;
-        var existingQueue = getQueue(destinationNode.id, correlationId);
+    sendIceCandidates(destinationNode: WebRTCCyclonNodePointer, correlationId: number, iceCandidates: RTCIceCandidate[]) {
+        let newQueue = iceCandidates;
+        const existingQueue = this.getQueue(destinationNode.id, correlationId);
         if (existingQueue) {
             newQueue = existingQueue.concat(iceCandidates);
         }
         else {
             // This is the first set of candidates to be queued for the destination/correlationId combo, schedule their delivery
-            setPromise(destinationNode.id, correlationId, scheduleCandidateDelivery(destinationNode, correlationId));
+            this.setPromise(destinationNode.id, correlationId, this.scheduleCandidateDelivery(destinationNode, correlationId));
         }
-        setQueue(destinationNode.id, correlationId, newQueue);
-        return getPromise(destinationNode.id, correlationId);
+        this.setQueue(destinationNode.id, correlationId, newQueue);
+        return this.getPromise(destinationNode.id, correlationId);
     };
 
-    function getPromise(destinationNodeId, correlationId) {
-        if (deliveryPromises.hasOwnProperty(destinationNodeId) && deliveryPromises[destinationNodeId].hasOwnProperty(correlationId)) {
-            return deliveryPromises[destinationNodeId][correlationId];
+    private getPromise(destinationNodeId: string, correlationId: number) {
+        if (this.deliveryPromises.hasOwnProperty(destinationNodeId) && this.deliveryPromises[destinationNodeId].hasOwnProperty(correlationId)) {
+            return this.deliveryPromises[destinationNodeId][correlationId];
         }
         else {
             throw new Error("Couldn't locate promise for send?! (this should never happen)");
         }
     }
 
-    function setPromise(nodeId, correlationId, newPromise) {
-        if (!deliveryPromises.hasOwnProperty(nodeId)) {
-            deliveryPromises[nodeId] = {};
+    private setPromise(nodeId: string, correlationId: number, newPromise: Promise<any>) {
+        if (!this.deliveryPromises.hasOwnProperty(nodeId)) {
+            this.deliveryPromises[nodeId] = {};
         }
-        deliveryPromises[nodeId][correlationId] = newPromise;
+        this.deliveryPromises[nodeId][correlationId] = newPromise;
     }
 
-    function deletePromise(nodeId, correlationId) {
-        delete deliveryPromises[nodeId][correlationId];
-        if (Object.keys(deliveryPromises[nodeId]).length === 0) {
-            delete deliveryPromises[nodeId];
+    private deletePromise(nodeId: string, correlationId: number): void {
+        delete this.deliveryPromises[nodeId][correlationId];
+        if (Object.keys(this.deliveryPromises[nodeId]).length === 0) {
+            delete this.deliveryPromises[nodeId];
         }
     }
 
-    function getQueue(nodeId, correlationId) {
-        if (queuedCandidates.hasOwnProperty(nodeId) && queuedCandidates[nodeId].hasOwnProperty(correlationId)) {
-            return queuedCandidates[nodeId][correlationId];
+    private getQueue(nodeId: string, correlationId: number): RTCIceCandidate[] | null {
+        if (this.queuedCandidates.hasOwnProperty(nodeId) && this.queuedCandidates[nodeId].hasOwnProperty(correlationId)) {
+            return this.queuedCandidates[nodeId][correlationId];
         }
         return null;
     }
 
-    function setQueue(nodeId, correlationId, newQueue) {
-        if (!queuedCandidates.hasOwnProperty(nodeId)) {
-            queuedCandidates[nodeId] = {};
+    private setQueue(nodeId: string, correlationId: number, newQueue: RTCIceCandidate[]) {
+        if (!this.queuedCandidates.hasOwnProperty(nodeId)) {
+            this.queuedCandidates[nodeId] = {};
         }
-        queuedCandidates[nodeId][correlationId] = newQueue;
+        this.queuedCandidates[nodeId][correlationId] = newQueue;
     }
 
-    function deleteQueue(nodeId, correlationId) {
-        delete queuedCandidates[nodeId][correlationId];
-        if (Object.keys(queuedCandidates[nodeId]).length === 0) {
-            delete queuedCandidates[nodeId];
+    private deleteQueue(nodeId: string, correlationId: number) {
+        delete this.queuedCandidates[nodeId][correlationId];
+        if (Object.keys(this.queuedCandidates[nodeId]).length === 0) {
+            delete this.queuedCandidates[nodeId];
         }
     }
 
-    function scheduleCandidateDelivery(destinationNode, correlationId) {
-        return new Promise(function (resolve, reject) {
-            asyncExecService.setTimeout(function () {
-                var queueToSend = getQueue(destinationNode.id, correlationId);
-                deleteQueue(destinationNode.id, correlationId);
-                deletePromise(destinationNode.id, correlationId);
-                signallingService.sendIceCandidates(destinationNode, correlationId, queueToSend)
-                    .then(resolve, reject);
-            }, batchingDelayMs);
+    private scheduleCandidateDelivery(destinationNode: WebRTCCyclonNodePointer, correlationId: number) {
+        return new Promise((resolve, reject) => {
+            this.asyncExecService.setTimeout(() => {
+                const queueToSend = this.getQueue(destinationNode.id, correlationId);
+                if (queueToSend) {
+                    this.deleteQueue(destinationNode.id, correlationId);
+                    this.deletePromise(destinationNode.id, correlationId);
+                    this.signallingService.sendIceCandidates(destinationNode, correlationId, queueToSend)
+                        .then(resolve, reject);
+                } else {
+                    this.logger.warn('ICE candidate queue to send was empty')
+                }
+            }, this.batchingDelayMs);
         });
     }
 }
-
-module.exports = IceCandidateBatchingSignallingService;

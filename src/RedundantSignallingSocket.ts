@@ -1,9 +1,12 @@
-'use strict';
+import EventEmitter from 'events';
+import {AsyncExecService, Logger} from "cyclon.p2p-common";
+import {SignallingServerService} from "./SignallingServerService";
+import {SignallingSocket} from "./SignallingSocket";
+import {AnswerMessage, IceCandidatesMessage, OfferMessage, SignallingService} from "./SignallingService";
+import {SocketFactory} from "./SocketFactory";
+import {SignallingServerSpec} from "./SignallingServerSpec";
 
-var EventEmitter = require("events").EventEmitter;
-var Utils = require("cyclon.p2p-common");
-
-var INTERVAL_BETWEEN_SERVER_CONNECTIVITY_CHECKS = 30 * 1000;
+const INTERVAL_BETWEEN_SERVER_CONNECTIVITY_CHECKS = 30 * 1000;
 
 /**
  * Maintains connections to up to a specified number of signalling servers
@@ -16,46 +19,56 @@ var INTERVAL_BETWEEN_SERVER_CONNECTIVITY_CHECKS = 30 * 1000;
  * @param signallingServerSelector
  * @constructor
  */
-function RedundantSignallingSocket(signallingServerService, socketFactory, loggingService, asyncExecService, signallingServerSelector) {
+export class RedundantSignallingSocket extends EventEmitter implements SignallingSocket  {
 
-    Utils.checkArguments(arguments, 5);
+    private readonly connectedSockets: { [signallingApiBase: string]: SocketIOClient.Socket };
+    private readonly connectedSpecs: { [signallingApiBase: string]: SignallingServerSpec };
+    private connectivityIntervalId?: number;
+    private unloadInProgress: boolean;
+    private signallingService?: SignallingService;
+    private rooms: string[];
 
-    var connectivityIntervalId = null;
-    var connectedSockets = {};
-    var connectedSpecs = {};
-    var myself = this;
-    var unloadInProgress = false;
-    var signallingService = null;
-    var rooms = [];
+    constructor(private readonly signallingServerService: SignallingServerService,
+                private readonly socketFactory: SocketFactory,
+                private readonly logger: Logger,
+                private readonly asyncExecService: AsyncExecService,
+                private readonly signallingServerSelector: any) {
+        super();
+        this.connectedSockets = {};
+        this.connectedSpecs = {};
+        this.unloadInProgress = false;
+        this.rooms = [];
 
-    // If we're in a window, watch for unloads so we can disable
-    // attempting to reconnect (and losing affinity with our previous signalling servers)
-    if (typeof(window) !== "undefined") {
-        window.addEventListener("beforeunload", function () {
-            unloadInProgress = true;
-        });
+        // If we're in a window, watch for unloads so we can disable
+        // attempting to reconnect (and losing affinity with our previous signalling servers)
+        if (typeof (window) !== "undefined") {
+            window.addEventListener("beforeunload", () => {
+                this.unloadInProgress = true;
+            });
+        }
+
+        // We should only ever have one answer, and one offer listener
+        this.setMaxListeners(2);
     }
 
-    // We should only ever have one answer, and one offer listener
-    myself.setMaxListeners(2);
 
     /**
      * Connect to signalling servers
      */
-    this.connect = function (localSignallingService, roomsToJoin) {
-        signallingService = localSignallingService;
-        rooms = roomsToJoin;
-        connectAndMonitor();
-    };
+    connect(localSignallingService: SignallingService, roomsToJoin: string[]) {
+        this.signallingService = localSignallingService;
+        this.rooms = roomsToJoin;
+        this.connectAndMonitor();
+    }
 
     /**
      * Schedule periodic server connectivity checks
      */
-    function scheduleServerConnectivityChecks() {
-        if (connectivityIntervalId === null) {
-            connectivityIntervalId = asyncExecService.setInterval(function () {
-                updateRegistrations();
-                connectToServers();
+    private scheduleServerConnectivityChecks() {
+        if (this.connectivityIntervalId === undefined) {
+            this.connectivityIntervalId = this.asyncExecService.setInterval(() => {
+                this.updateRegistrations();
+                this.connectToServers();
             }, INTERVAL_BETWEEN_SERVER_CONNECTIVITY_CHECKS);
         }
         else {
@@ -67,23 +80,25 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      * Update our registrations with the servers
      * we're connected to
      */
-    function updateRegistrations() {
-        for (var key in connectedSockets) {
-            sendRegisterMessage(connectedSockets[key]);
+    private updateRegistrations(): void {
+        for (const key in this.connectedSockets) {
+            this.sendRegisterMessage(this.connectedSockets[key]);
         }
     }
 
     /**
      * Stop periodic connectivity checks
      */
-    function stopConnectivityChecks() {
-        asyncExecService.clearInterval(connectivityIntervalId);
-        connectivityIntervalId = null;
+    private stopConnectivityChecks(): void {
+        if (this.connectivityIntervalId !== undefined) {
+            this.asyncExecService.clearInterval(this.connectivityIntervalId);
+            delete this.connectivityIntervalId;
+        }
     }
 
-    function connectAndMonitor() {
-        connectToServers();
-        scheduleServerConnectivityChecks();
+    private connectAndMonitor(): void {
+        this.connectToServers();
+        this.scheduleServerConnectivityChecks();
     }
 
     /**
@@ -91,22 +106,22 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      *
      * @returns {Array}
      */
-    this.getCurrentServerSpecs = function () {
-        var specs = [];
-        for (var spec in connectedSpecs) {
-            specs.push(connectedSpecs[spec]);
+    getCurrentServerSpecs(): SignallingServerSpec[] {
+        const specs = [];
+        for (const spec in this.connectedSpecs) {
+            specs.push(this.connectedSpecs[spec]);
         }
         return specs;
-    };
+    }
 
     /**
      * Connect to servers if we're not connected to enough
      */
-    function connectToServers() {
-        var knownServers = signallingServerSelector.getServerSpecsInPriorityOrder();
+    private connectToServers(): void {
+        const knownServers = this.signallingServerSelector.getServerSpecsInPriorityOrder();
 
-        for (var i = 0; i < knownServers.length; i++) {
-            var connectionsRemaining = signallingServerService.getPreferredNumberOfSockets() - Object.keys(connectedSockets).length;
+        for (let i = 0; i < knownServers.length; i++) {
+            const connectionsRemaining = this.signallingServerService.getPreferredNumberOfSockets() - Object.keys(this.connectedSockets).length;
 
             //
             // We have enough connections
@@ -118,17 +133,17 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
             //
             // Try to connect to a new server
             //
-            var serverSpec = knownServers[i];
-            if (!currentlyConnectedToServer(serverSpec)) {
-                var socket;
+            const serverSpec = knownServers[i];
+            if (!this.currentlyConnectedToServer(serverSpec)) {
+                let socket;
                 try {
-                    socket = socketFactory.createSocket(serverSpec);
-                    storeSocket(serverSpec, socket);
-                    addListeners(socket, serverSpec);
-                    loggingService.info("Attempting to connect to signalling server (" + serverSpec.signallingApiBase + ")");
+                    socket = this.socketFactory.createSocket(serverSpec);
+                    this.storeSocket(serverSpec, socket);
+                    this.addListeners(socket, serverSpec);
+                    this.logger.info(`Attempting to connect to signalling server (${serverSpec.signallingApiBase})`);
                 }
                 catch (error) {
-                    loggingService.error("Error connecting to socket " + serverSpec.signallingApiBase, error);
+                    this.logger.error(`Error connecting to socket ${serverSpec.signallingApiBase}`, error);
                 }
             }
         }
@@ -137,7 +152,7 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
         // Store the new set of connected servers in session storage so we
         // can prefer them in the event of a reload
         //
-        signallingServerSelector.setLastConnectedServers(getListOfCurrentSignallingApiBases());
+        this.signallingServerSelector.setLastConnectedServers(this.getListOfCurrentSignallingApiBases());
     }
 
     /**
@@ -146,8 +161,8 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      * @param serverSpec
      * @returns {boolean}
      */
-    function currentlyConnectedToServer(serverSpec) {
-        return connectedSockets.hasOwnProperty(serverSpec.signallingApiBase);
+    private currentlyConnectedToServer(serverSpec: SignallingServerSpec): boolean {
+        return this.connectedSockets.hasOwnProperty(serverSpec.signallingApiBase);
     }
 
     /**
@@ -156,8 +171,8 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      *
      * @returns {Array}
      */
-    function getListOfCurrentSignallingApiBases() {
-        return Object.keys(connectedSpecs);
+    private getListOfCurrentSignallingApiBases(): string[] {
+        return Object.keys(this.connectedSpecs);
     }
 
     /**
@@ -166,9 +181,9 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      * @param spec
      * @param socket
      */
-    function storeSocket(spec, socket) {
-        connectedSpecs[spec.signallingApiBase] = spec;
-        connectedSockets[spec.signallingApiBase] = socket;
+    private storeSocket(spec: SignallingServerSpec, socket: SocketIOClient.Socket) {
+        this.connectedSpecs[spec.signallingApiBase] = spec;
+        this.connectedSockets[spec.signallingApiBase] = socket;
     }
 
     /**
@@ -176,10 +191,10 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      *
      * @param apiBase
      */
-    function deleteSocket(apiBase) {
-        delete connectedSpecs[apiBase];
-        delete connectedSockets[apiBase];
-        signallingServerSelector.flagDisconnection(apiBase);
+    private deleteSocket(apiBase: string): void {
+        delete this.connectedSpecs[apiBase];
+        delete this.connectedSockets[apiBase];
+        this.signallingServerSelector.flagDisconnection(apiBase);
     }
 
     /**
@@ -188,10 +203,10 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      * @param socket
      * @param serverSpec
      */
-    function addListeners(socket, serverSpec) {
-        var apiBase = serverSpec.signallingApiBase;
-        var disposeFunction = disposeOfSocket(apiBase);
-        var registerFunction = register(socket);
+    private addListeners(socket: SocketIOClient.Socket, serverSpec: SignallingServerSpec) {
+        const apiBase = serverSpec.signallingApiBase;
+        const disposeFunction = this.disposeOfSocket(apiBase);
+        const registerFunction = this.register(socket);
 
         // Register if we connect
         socket.on("connect", registerFunction);
@@ -204,9 +219,15 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
         /**
          * Emit offers/answers when they're received
          */
-        socket.on("answer", emitAnswer);
-        socket.on("offer", emitOffer);
-        socket.on("candidates", emitCandidates);
+        socket.on("answer", (answer: AnswerMessage) => {
+            this.emitAnswer(answer);
+        });
+        socket.on("offer", (offer: OfferMessage) => {
+            this.emitOffer(offer);
+        });
+        socket.on("candidates", (candidates: IceCandidatesMessage) => {
+            this.emitCandidates(candidates);
+        });
     }
 
     /**
@@ -215,13 +236,13 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      * @param apiBase
      * @returns {Function}
      */
-    function disposeOfSocket(apiBase) {
-        return function (error) {
-            loggingService.warn("Got disconnected from signalling server (" + apiBase + ")", error);
+    private disposeOfSocket(apiBase: string) {
+        return (error: Error) => {
+            this.logger.warn(`Got disconnected from signalling server (${apiBase})`, error);
 
-            var socket = connectedSockets[apiBase];
+            const socket = this.connectedSockets[apiBase];
             if (socket) {
-                stopConnectivityChecks();
+                this.stopConnectivityChecks();
                 socket.removeAllListeners();
                 socket.io.removeAllListeners();
                 try {
@@ -229,10 +250,10 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
                 }
                 catch (ignore) {
                 }
-                deleteSocket(apiBase);
+                this.deleteSocket(apiBase);
 
-                if (!unloadInProgress) {
-                    connectAndMonitor();
+                if (!this.unloadInProgress) {
+                    this.connectAndMonitor();
                 }
             }
             else {
@@ -247,34 +268,30 @@ function RedundantSignallingSocket(signallingServerService, socketFactory, loggi
      * @param socket
      * @returns {Function}
      */
-    function register(socket) {
-        return function () {
-            sendRegisterMessage(socket);
-            sendJoinRoomsMessage(socket);
+    private register(socket: SocketIOClient.Socket) {
+        return () => {
+            this.sendRegisterMessage(socket);
+            this.sendJoinRoomsMessage(socket);
         };
     }
 
-    function sendRegisterMessage(socket) {
-        socket.emit("register", signallingService.createNewPointer());
+    private sendRegisterMessage(socket: SocketIOClient.Socket) {
+        socket.emit("register", (this.signallingService as SignallingService).createNewPointer());
     }
 
-    function sendJoinRoomsMessage(socket) {
-        socket.emit("join", rooms);
+    private sendJoinRoomsMessage(socket: SocketIOClient.Socket) {
+        socket.emit("join", this.rooms);
     }
 
-    function emitAnswer(message) {
-        myself.emit("answer", message);
+    private emitAnswer(message: AnswerMessage) {
+        this.emit("answer", message);
     }
 
-    function emitOffer(message) {
-        myself.emit("offer", message);
+    private emitOffer(message: OfferMessage) {
+        this.emit("offer", message);
     }
 
-    function emitCandidates(message) {
-        myself.emit("candidates", message);
+    private emitCandidates(message: IceCandidatesMessage) {
+        this.emit("candidates", message);
     }
 }
-
-RedundantSignallingSocket.prototype = Object.create(EventEmitter.prototype);
-
-module.exports = RedundantSignallingSocket;

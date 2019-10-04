@@ -1,34 +1,33 @@
-'use strict';
+import http, {ClientRequest, IncomingMessage} from 'http';
+import url  from 'url';
+import {Promise} from 'bluebird';
 
-var http = require("http");
-var url = require("url");
-var Promise = require("bluebird");
+export class HttpRequestService {
 
-function HttpRequestService() {
+    post(requestUrl: string, contents: any): Promise<any> {
+        return this.executeRequest('POST', requestUrl, contents, 201);
+    }
 
-    this.post = function (requestUrl, contents) {
-        return executeRequest('POST', requestUrl, contents, 201);
-    };
+    get(requestUrl: string): Promise<any> {
+        return this.executeRequest('GET', requestUrl, null, 200);
+    }
 
-    this.get = function (requestUrl) {
-        return executeRequest('GET', requestUrl, null, 200);
-    };
-
-    function executeRequest(method, requestUrl, contents, expectedStatus) {
-        var parsedUrl = url.parse(requestUrl);
+    private executeRequest(method: string, requestUrl: string, contents: any, expectedStatus: number): Promise<any> {
+        const parsedUrl = url.parse(requestUrl);
+        let contentString: string;
         if (contents) {
-            var contentString = JSON.stringify(contents);
+            contentString = JSON.stringify(contents);
         }
-        var req = null;
+        let req: ClientRequest;
 
-        return new Promise(function (resolve, reject) {
-            var options = {
+        return new Promise(function (resolve: Function, reject: Function) {
+            const options = {
                 withCredentials: false,
                 hostname: parsedUrl.hostname,
                 port: parsedUrl.port,
                 path: parsedUrl.path,
                 method: method
-            };
+            } as any;
 
             if (contents) {
                 options.headers = {
@@ -37,9 +36,9 @@ function HttpRequestService() {
                 }
             }
 
-            req = http.request(options, function (res) {
+            req = http.request(options, function (res: IncomingMessage) {
                 if (res.statusCode === expectedStatus) {
-                    var responseContent = "";
+                    let responseContent: string = "";
                     res.on("data", function (chunk) {
                         responseContent += chunk;
                     });
@@ -54,7 +53,7 @@ function HttpRequestService() {
                     });
                 }
                 else {
-                    reject(new Error(res.statusCode));
+                    reject(new Error(`Request failed, status code: ${res.statusCode}`));
                 }
             });
 
@@ -63,9 +62,9 @@ function HttpRequestService() {
             }
             req.end();
         }).cancellable().catch(Promise.CancellationError, function (e) {
-                req.abort();
-                throw e;
-            });
+            req.abort();
+            throw e;
+        });
     }
 }
 
@@ -75,9 +74,7 @@ function HttpRequestService() {
  * @param response
  * @returns {boolean}
  */
-function responseContentIsJson(response) {
+function responseContentIsJson(response: IncomingMessage) {
     return response.headers["content-type"] &&
         response.headers["content-type"].indexOf("application/json") === 0;
 }
-
-module.exports = HttpRequestService;
