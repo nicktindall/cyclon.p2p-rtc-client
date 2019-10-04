@@ -7,9 +7,11 @@ import {SocketIOSignallingService} from './SocketIOSignallingService';
 import {IceCandidateBatchingSignallingService} from './IceCandidateBatchingSignallingService';
 import {NativeRTCObjectFactory} from './NativeRTCObjectFactory';
 import {ChannelFactory} from './ChannelFactory';
+import {Channel} from './Channel';
 import {PeerConnectionFactory} from './PeerConnectionFactory';
 import {RTC} from './rtc';
 import {SignallingServerSelector} from './SignallingServerSelector';
+import {WebRTCCyclonNodePointer} from './WebRTCCyclonNodePointer';
 import {asyncExecService} from "cyclon.p2p-common";
 
 /*
@@ -55,7 +57,9 @@ export {
     SocketIOSignallingService,
     SocketFactory,
     PeerConnectionFactory,
-    IceCandidateBatchingSignallingService
+    IceCandidateBatchingSignallingService,
+    WebRTCCyclonNodePointer,
+    Channel
 }
 
 /**
