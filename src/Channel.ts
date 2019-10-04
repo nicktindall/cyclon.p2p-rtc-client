@@ -150,7 +150,7 @@ export class Channel {
      * @param type the type of message to send
      * @param message The message to send
      */
-    send(type: string, message: any) {
+    send(type: string, message?: any) {
         if (this.rtcDataChannel === undefined) {
             throw new Error("Data channel has not yet been established!");
         }
