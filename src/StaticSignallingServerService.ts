@@ -1,9 +1,10 @@
 import {SignallingServerSpec} from "./SignallingServerSpec";
+import {SignallingServerService} from './SignallingServerService';
 
 /**
  * Just returns a list of known signalling servers
  */
-export class StaticSignallingServerService {
+export class StaticSignallingServerService implements SignallingServerService {
 
     constructor(private readonly signallingServers: SignallingServerSpec[]) {
     }
