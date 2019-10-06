@@ -69,7 +69,7 @@ export {
  *
  * @param angular The angular core module
  */
-module.exports.buildAngularModule = function (angular: any) {
+export function buildAngularModule(angular: any): any {
     var rtcModule = angular.module("cyclon-rtc", []);
 
     rtcModule.service("RTC", ["IceCandidateBatchingSignallingService", "ChannelFactory", RTC]);
@@ -97,4 +97,4 @@ module.exports.buildAngularModule = function (angular: any) {
     rtcModule.value("SignallingServerReconnectDelay", DEFAULT_SIGNALLING_SERVER_RECONNECT_DELAY_MS);
 
     return rtcModule;
-};
+}
