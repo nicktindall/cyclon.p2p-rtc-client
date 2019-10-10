@@ -16,22 +16,21 @@ First install cyclon.p2p-rtc-client as a runtime dependency using npm
 npm install cyclon.p2p-rtc-client --save
 ```
 
-If you are using browserify and AngularJS in your project you can include the 'cyclon-rtc' module simply:
+You can create an 'RTC' and its 'SignallingSocket' by using the builder provided, e.g:
 
 ```javascript
-var cyclonRtc = require('cyclon.p2p-rtc-client');
-var angular = require('angular');  // or wherever angular comes from
+const {rtcBuilder} = require('cyclon.p2p-rtc-client')
 
-// Create the 'cyclon-rtc' module
-cyclonRtc.createAngularModule(angular);
-
-// Then any modules that depend on 'cyclon-rtc' can use the 'RTC' service exposed
-var myModule = angular.module('myModule', ['cyclon-rtc'])
-myModule.service('myService', ['RTC', function(rtcClient) {
-    // ...
-  }]);
-  
+const {rtc, signallingSocket} = rtcBuilder().build();
 ```
+
+The builder provides a number of customization points:
+
+`.withSignallingServers(signallingServers: SignallingServerSpec[])` : use the specified signalling servers
+
+`.withIceServers(iceServers: RTCIceServer[])` : use the specified ICE servers
+
+and various others, check the Builder class for details
 
 The RTC API
 -----------
@@ -131,37 +130,38 @@ rtc.openChannel('PingExchange', remotePointer)
         
 Configuration
 -------------
-By default the module created will use
+By default the client created will use
 
 * Three demonstration signalling servers deployed on Heroku. These should be used for evaluation purposes only as their availability is not guaranteed, and they are shared between anyone that uses this library with the default settings.
 * The "public" STUN server provided by Google. Again, for any serious deployment users should provide their own STUN and/or TURN infrastructure. The Google STUN server probably cannot be relied upon to be there and freely available forever.
 
-You can change these defaults by specifying configuration values on the modules that are created. e.g.
+You can change these defaults by passing configuration values to the builder. e.g.
 
 ```javascript
-rtc.buildAngularModule(angular)
-    .value('IceServers', [
-        {
-            'urls': ['turn:11.22.33.44', 'turn:11.22.33.44?transport=tcp'],
-            'username': 'specialUser',
-            'credential': 'topSecret'
-        }
-    ])
-    .value('SignallingServers', [
+const {rtcBuilder} = require('cyclon.p2p-rtc-client')
+
+const {rtc, signallingSocket} = rtcBuilder()
+    .withSignallingServers([
         {
             'socket': {
                 'server': 'http://signalling.mycompany.com'
             },
             'signallingApiBase': 'http://signalling.mycompany.com'
         }
-    ]);
+    ])
+    // see https://developer.mozilla.org/en-US/docs/Web/API/RTCIceServer
+    .withIceServers([
+        {
+            'urls': ['turn:11.22.33.44', 'turn:11.22.33.44?transport=tcp'],
+            'username': 'specialUser',
+            'credential': 'topSecret'
+        }
+    ])
+    .build();
 ```
 
-You can also override many of the services specified in the modules if you feel like tinkering, check out the `buildAngularModule()` function in lib/index.js file for more details.
+You can also override many of the services specified in the modules if you feel like tinkering, check out the `rtcBuilder()` function in `src/index.ts` file for more details.
 
 Signalling Servers
 ------------------
-Check out the corresponding signalling server project, [cyclon.p2p-rtc-server](https://github.com/nicktindall/cyclon.p2p-rtc-server), if you would like to run your own signalling servers. The whole signalling infrastructure is abstracted so you could also implement your own and use that instead. See `lib/SocketIOSignallingServer.js` for the interface expected.
-
-
-
+Check out the corresponding signalling server project, [cyclon.p2p-rtc-server](https://github.com/nicktindall/cyclon.p2p-rtc-server) if you would like to run your own signalling servers. The whole signalling infrastructure is abstracted so you could also implement your own and use that instead. See `src/SignallingService.ts` for the interface expected.

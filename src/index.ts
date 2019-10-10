@@ -12,38 +12,18 @@ import {PeerConnectionFactory} from './PeerConnectionFactory';
 import {RTC} from './rtc';
 import {SignallingServerSelector} from './SignallingServerSelector';
 import {WebRTCCyclonNodePointer} from './WebRTCCyclonNodePointer';
-import {asyncExecService} from "cyclon.p2p-common";
+import {Builder} from './Builder';
+import {
+    DEFAULT_BATCHING_DELAY_MS,
+    DEFAULT_CHANNEL_STATE_TIMEOUT_MS,
+    DEFAULT_ICE_SERVERS,
+    DEFAULT_SIGNALLING_SERVER_RECONNECT_DELAY_MS,
+    DEFAULT_SIGNALLING_SERVERS
+} from './Defaults'
 
-/*
- * Default values
- */
-const DEFAULT_BATCHING_DELAY_MS = 300;
-const DEFAULT_SIGNALLING_SERVERS = [
-    {
-        "socket": {
-            "server": "http://cyclon-js-ss-one.herokuapp.com"
-        },
-        "signallingApiBase": "http://cyclon-js-ss-one.herokuapp.com"
-    },
-    {
-        "socket": {
-            "server": "http://cyclon-js-ss-two.herokuapp.com"
-        },
-        "signallingApiBase": "http://cyclon-js-ss-two.herokuapp.com"
-    },
-    {
-        "socket": {
-            "server": "http://cyclon-js-ss-three.herokuapp.com"
-        },
-        "signallingApiBase": "http://cyclon-js-ss-three.herokuapp.com"
-    }
-];
-const DEFAULT_ICE_SERVERS = [
-    // The public Google STUN server
-    {urls: ['stun:stun.l.google.com:19302']},
-];
-const DEFAULT_CHANNEL_STATE_TIMEOUT_MS = 30000;
-const DEFAULT_SIGNALLING_SERVER_RECONNECT_DELAY_MS = 5000;
+function rtcBuilder(): Builder {
+    return new Builder();
+}
 
 export {
     RTC,
@@ -59,42 +39,11 @@ export {
     PeerConnectionFactory,
     IceCandidateBatchingSignallingService,
     WebRTCCyclonNodePointer,
-    Channel
-}
-
-/**
- * Build the angular cyclon-rtc module
- *
- * @deprecated This is going to go very soon
- *
- * @param angular The angular core module
- */
-export function buildAngularModule(angular: any): any {
-    var rtcModule = angular.module("cyclon-rtc", []);
-
-    rtcModule.service("RTC", ["IceCandidateBatchingSignallingService", "ChannelFactory", RTC]);
-    rtcModule.service("ChannelFactory", ["PeerConnectionFactory", "IceCandidateBatchingSignallingService", "$log", "ChannelStateTimeout", ChannelFactory]);
-    rtcModule.service("PeerConnectionFactory", ["RTCObjectFactory", "$log", "IceServers", "ChannelStateTimeout", PeerConnectionFactory]);
-    rtcModule.service("RTCObjectFactory", ["$log", NativeRTCObjectFactory]);
-    rtcModule.factory("AsyncExecService", asyncExecService);
-    rtcModule.service("IceCandidateBatchingSignallingService", ["AsyncExecService", "SignallingService", "IceCandidateBatchingDelay", IceCandidateBatchingSignallingService]);
-    rtcModule.service("SignallingService", ["SignallingSocket", "$log", "HttpRequestService", "StorageService", SocketIOSignallingService]);
-    rtcModule.service("SignallingSocket", ["SignallingServerService", "SocketFactory", "$log", "AsyncExecService", "SignallingServerSelector", RedundantSignallingSocket]);
-    rtcModule.service("SignallingServerSelector", ["SignallingServerService", "StorageService", "TimingService", "SignallingServerReconnectDelay", SignallingServerSelector]);
-    rtcModule.service("HttpRequestService", HttpRequestService);
-    rtcModule.service("SignallingServerService", ["SignallingServers", StaticSignallingServerService]);
-    rtcModule.service("SocketFactory", SocketFactory);
-    rtcModule.service("TimingService", TimingService);
-    rtcModule.factory("StorageService", sessionStorage);
-
-    /**
-     * Default config values
-     */
-    rtcModule.value("IceServers", DEFAULT_ICE_SERVERS);
-    rtcModule.value("ChannelStateTimeout", DEFAULT_CHANNEL_STATE_TIMEOUT_MS);
-    rtcModule.value("IceCandidateBatchingDelay", DEFAULT_BATCHING_DELAY_MS);
-    rtcModule.value("SignallingServers", DEFAULT_SIGNALLING_SERVERS);
-    rtcModule.value("SignallingServerReconnectDelay", DEFAULT_SIGNALLING_SERVER_RECONNECT_DELAY_MS);
-
-    return rtcModule;
+    Channel,
+    rtcBuilder,
+    DEFAULT_ICE_SERVERS,
+    DEFAULT_BATCHING_DELAY_MS,
+    DEFAULT_CHANNEL_STATE_TIMEOUT_MS,
+    DEFAULT_SIGNALLING_SERVER_RECONNECT_DELAY_MS,
+    DEFAULT_SIGNALLING_SERVERS
 }
