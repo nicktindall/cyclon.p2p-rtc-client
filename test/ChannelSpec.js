@@ -1,9 +1,8 @@
 'use strict';
 
-var ClientMocks = require("./ClientMocks");
-var {Channel} = require("../lib/Channel");
-var Promise = require("bluebird");
-var events = require("events");
+const ClientMocks = require("./ClientMocks");
+const {Channel} = require("../lib/Channel");
+const events = require("events");
 
 describe("The Channel", function() {
 
@@ -89,8 +88,8 @@ describe("The Channel", function() {
 			peerConnection.createOffer.and.returnValue(createOfferResult);
 		});
 
-		it('delegates to the peer connection', function() {
-			expect(channel.createOffer(CHANNEL_TYPE)).toBe(createOfferResult);
+		it('delegates to the peer connection', async () => {
+			expect(await channel.createOffer(CHANNEL_TYPE)).toBe(createOfferResult);
 			expect(peerConnection.createOffer).toHaveBeenCalledWith();
 		});
 	});
@@ -104,31 +103,23 @@ describe("The Channel", function() {
 			peerConnection.createAnswer.and.returnValue(createAnswerResult);
 		});
 
-		it('delegates to the peer connection', function() {
-			expect(channel.createAnswer(REMOTE_DESCRIPTION)).toBe(createAnswerResult);
+		it('delegates to the peer connection', async () => {
+			expect(await channel.createAnswer(REMOTE_DESCRIPTION)).toBe(createAnswerResult);
 			expect(peerConnection.createAnswer).toHaveBeenCalledWith(REMOTE_DESCRIPTION);
 		});
 	});
 
-	describe('when sending an answer', function() {
+	describe('when sending an answer', () => {
 
-		var sendAnswerResult;
+		const RESULT = 'SEND_ANSWER_RESULT';
 
 		beforeEach(function() {
-			sendAnswerResult = ClientMocks.mockPromise("SEND_ANSWER_RESULT");
-			signallingService.sendAnswer.and.returnValue(sendAnswerResult);
+			signallingService.sendAnswer.and.returnValue(Promise.resolve(RESULT));
 		});
 
-		it('delegates to the signalling service', function() {
-			expect(channel.sendAnswer()).toBe(sendAnswerResult);
+		it('delegates to the signalling service', async () => {
+			expect(await channel.sendAnswer()).toBe(RESULT);
 			expect(signallingService.sendAnswer).toHaveBeenCalledWith(REMOTE_PEER, CORRELATION_ID, LOCAL_DESCRIPTION);
-		});
-
-		it('sets the lastOutstandingPromise', function() {
-		 	channel.sendAnswer();
-		 	sendAnswerResult.isPending.and.returnValue(true);
-		 	channel.cancel();
-		 	expect(sendAnswerResult.cancel).toHaveBeenCalled();
 		});
 	});
 
@@ -162,52 +153,34 @@ describe("The Channel", function() {
 		describe('and the channel establishment timeout expires', function() {
 
 			it('will throw a timeout exception', function(done) {
-				channel.waitForChannelEstablishment().catch(Promise.TimeoutError, done);
+				channel.waitForChannelEstablishment().catch(done);
 			});
 		});
 	});
 
 	describe('when sending an offer', function() {
 
-		var sendOfferResult;
-
 		beforeEach(function() {
-			sendOfferResult = ClientMocks.mockPromise();
-			signallingService.sendOffer.and.returnValue(sendOfferResult);
+			signallingService.sendOffer.and.returnValue(Promise.resolve());
 			channel.createOffer(CHANNEL_TYPE);
 		});
 
-		it('delegates to the signalling service', function() {
-			expect(channel.sendOffer(LOCAL_DESCRIPTION)).toBe(sendOfferResult);
+		it('delegates to the signalling service', async () => {
+			await channel.sendOffer(LOCAL_DESCRIPTION);
 			expect(signallingService.sendOffer).toHaveBeenCalledWith(REMOTE_PEER, CHANNEL_TYPE, LOCAL_DESCRIPTION);
-		});
-
-		it('stores the promise for later cancellation', function() {
-			sendOfferResult.isPending.and.returnValue(true);
-			channel.sendOffer();
-			channel.cancel();
-			expect(sendOfferResult.cancel).toHaveBeenCalled();
 		});
 	});
 
 	describe('when waiting for an answer', function() {
 
-		var waitForAnswerResult;
+		const RESULT='WAIT_FOR_ANSWER_RESULT';
 
 		beforeEach(function() {
-			waitForAnswerResult = ClientMocks.mockPromise();
-			signallingService.waitForAnswer.and.returnValue(waitForAnswerResult);
+			signallingService.waitForAnswer.and.returnValue(Promise.resolve(RESULT));
 		});
 
-		it('delegates to the signalling service', function() {
-			expect(channel.waitForAnswer()).toBe(waitForAnswerResult);
-		});
-
-		it('stores the promise for later cancellation', function() {
-			waitForAnswerResult.isPending.and.returnValue(true);
-			channel.waitForAnswer();
-			channel.cancel();
-			expect(waitForAnswerResult.cancel).toHaveBeenCalled();
+		it('delegates to the signalling service', async () => {
+			expect(await channel.waitForAnswer()).toBe(RESULT);
 		});
 	});
 
@@ -217,11 +190,11 @@ describe("The Channel", function() {
 
 		beforeEach(function() {
 			handleAnswerResult = "HANDLE_ANSWER_RESULT";
-			peerConnection.handleAnswer.and.returnValue(handleAnswerResult);
+			peerConnection.handleAnswer.and.returnValue(Promise.resolve(handleAnswerResult));
 		});
 
-		it('delegates to the peer connection', function() {
-			expect(channel.handleAnswer()).toBe(handleAnswerResult);
+		it('delegates to the peer connection', async () => {
+			expect(await channel.handleAnswer()).toBe(handleAnswerResult);
 		});
 	});
 
@@ -402,20 +375,11 @@ describe("The Channel", function() {
                     });
 				});
 
-				it('will reject with a timeout error if the timeout expires before the message is received', function(done) {
+				it('will reject with a timeout error if the timeout expires before the message is received', (done) => {
 					channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
-                        .catch(Promise.TimeoutError, function() {
+                        .catch(() => {
                             done();
                         });
-				});
-
-				it('will reject with a cancellation error if cancel is called before the message is received', function(done) {
-                    channel.receive(MESSAGE_TYPE, RECEIVE_TIMEOUT_MS)
-                        .then(successCallback)
-                        .catch(Promise.CancellationError, function() {
-                            done();
-                        })
-                        .cancel();
 				});
 
 				it('will return any unhandled messages before returning new ones', function(done) {

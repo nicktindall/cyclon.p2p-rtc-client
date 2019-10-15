@@ -1,5 +1,4 @@
-import {Promise} from 'bluebird';
-import {Logger, BufferingEventEmitter} from 'cyclon.p2p-common';
+import {Logger, BufferingEventEmitter, timeLimitedPromise} from 'cyclon.p2p-common';
 import {AnswerMessage, SignallingService} from './SignallingService';
 import {PeerConnection} from "./PeerConnection";
 import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
@@ -11,7 +10,6 @@ export class Channel {
     private resolvedCorrelationId?: number;
     private channelType?: string;
     private rtcDataChannel?: RTCDataChannel;
-    private lastOutstandingPromise?: Promise<any>;
 
     constructor(private readonly remotePeer: WebRTCCyclonNodePointer,
                 private readonly correlationId: number | undefined,
@@ -48,9 +46,9 @@ export class Channel {
     startListeningForRemoteIceCandidates(): void {
         this.verifyCorrelationId();
 
-        this.signallingService.on(this.remoteCandidatesEventId(), (message: any) => {
+        this.signallingService.on(this.remoteCandidatesEventId(), async (message: any) => {
             try {
-                this.peerConnection.processRemoteIceCandidates(message.iceCandidates);
+                await this.peerConnection.processRemoteIceCandidates(message.iceCandidates);
             } catch (error) {
                 this.logger.error("Error handling peer candidates", error);
             }
@@ -61,32 +59,30 @@ export class Channel {
         return this.remotePeer;
     }
 
-    createOffer(type: string): Promise<RTCSessionDescriptionInit> {
+    async createOffer(type: string): Promise<RTCSessionDescriptionInit> {
         this.channelType = type;
-        return this.peerConnection.createOffer();
+        return await this.peerConnection.createOffer();
     }
 
-    createAnswer(remoteDescription: RTCSessionDescriptionInit): Promise<void> {
-        return this.peerConnection.createAnswer(remoteDescription);
+    async createAnswer(remoteDescription: RTCSessionDescriptionInit): Promise<void> {
+        return await this.peerConnection.createAnswer(remoteDescription);
     }
 
-    sendAnswer(): Promise<void> {
+    async sendAnswer(): Promise<void> {
         const correlationId = this.verifyCorrelationId();
 
-        this.lastOutstandingPromise = this.signallingService.sendAnswer(
+        return await this.signallingService.sendAnswer(
             this.remotePeer,
             correlationId,
             this.peerConnection.getLocalDescription());
-        return this.lastOutstandingPromise;
     }
 
-    waitForChannelEstablishment(): Promise<Channel> {
-        this.lastOutstandingPromise = new Promise((resolve) => {
+    async waitForChannelEstablishment(): Promise<Channel> {
+        return await timeLimitedPromise(new Promise((resolve) => {
             this.channelEstablishedEventEmitter.once('channelEstablished', () => {
                 resolve(this);
             });
-        }).timeout(this.channelStateTimeoutMs, "Data channel establishment timeout exceeded");
-        return this.lastOutstandingPromise;
+        }), this.channelStateTimeoutMs);
     }
 
     startSendingIceCandidates(): void {
@@ -105,28 +101,26 @@ export class Channel {
         return this;
     }
 
-    sendOffer(): Promise<void> {
-        this.lastOutstandingPromise = this.signallingService.sendOffer(
+    async sendOffer(): Promise<void> {
+        return await this.signallingService.sendOffer(
             this.remotePeer,
             this.channelType as string,
             this.peerConnection.getLocalDescription())
             .then((correlationId) => {
                 this.resolvedCorrelationId = correlationId;
             });
-        return this.lastOutstandingPromise as Promise<void>;
     }
 
-    waitForAnswer(): Promise<AnswerMessage> {
-        this.lastOutstandingPromise = this.signallingService.waitForAnswer(this.verifyCorrelationId());
-        return this.lastOutstandingPromise as Promise<AnswerMessage>;
+    async waitForAnswer(): Promise<AnswerMessage> {
+        return await this.signallingService.waitForAnswer(this.verifyCorrelationId());
     }
 
-    handleAnswer(answerMessage: AnswerMessage): Promise<void> {
-        return this.peerConnection.handleAnswer(answerMessage);
+    async handleAnswer(answerMessage: AnswerMessage): Promise<void> {
+        return await this.peerConnection.handleAnswer(answerMessage);
     }
 
-    waitForChannelToOpen(): Promise<RTCDataChannel> {
-        return this.peerConnection.waitForChannelToOpen();
+    async waitForChannelToOpen(): Promise<RTCDataChannel> {
+        return await this.peerConnection.waitForChannelToOpen();
     }
 
     private addMessageListener(): void {
@@ -150,7 +144,7 @@ export class Channel {
      * @param type the type of message to send
      * @param message The message to send
      */
-    send(type: string, message?: any) {
+    send(type: string, message?: any): void {
         if (this.rtcDataChannel === undefined) {
             throw new Error("Data channel has not yet been established!");
         }
@@ -170,10 +164,10 @@ export class Channel {
      * @param messageType
      * @param timeoutInMilliseconds
      */
-    receive(messageType: string, timeoutInMilliseconds: number) {
+    async receive(messageType: string, timeoutInMilliseconds: number): Promise<string> {
         let handlerFunction: (... args: any[]) => void;
 
-        this.lastOutstandingPromise = new Promise((resolve, reject) => {
+        return await timeLimitedPromise(new Promise<string>((resolve, reject) => {
 
             if (this.rtcDataChannel === undefined || "open" !== String(this.rtcDataChannel.readyState)) {
                 reject(new Error(`Data channel must be in 'open' state to receive ${messageType} message`));
@@ -187,27 +181,9 @@ export class Channel {
             };
 
             this.messages.once(messageType, handlerFunction);
-        })
-        .timeout(timeoutInMilliseconds, "Timeout reached waiting for '" + messageType + "' message (from " + this.remotePeer.id + ")")
-        //
-        // If cancel or timeout occurs, remove the message listener
-        //
-        .catch(Promise.TimeoutError, (e) => {
+        }), this.channelStateTimeoutMs, `Timeout reached waiting for '${messageType}' message (from ${this.remotePeer.id})`).finally(() => {
             this.messages.removeListener(messageType, handlerFunction);
-            throw e;
-        })
-        .catch(Promise.CancellationError, (e) => {
-            this.messages.removeListener(messageType, handlerFunction);
-            throw e;
         });
-
-        return this.lastOutstandingPromise;
-    }
-
-    cancel() {
-        if (this.lastOutstandingPromise && this.lastOutstandingPromise.isPending()) {
-            this.lastOutstandingPromise.cancel();
-        }
     }
 
     close() {

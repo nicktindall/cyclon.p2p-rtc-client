@@ -9,7 +9,6 @@ export class PeerConnection extends EventEmitter {
     private storedIceCandidates: { [serialized:string]: boolean } = {};
     private rtcDataChannel?: RTCDataChannel;
     private localDescription?: RTCSessionDescriptionInit;
-    private lastOutstandingPromise?: Promise<any>;
     private emittingIceCandidates: boolean = false;
     private remoteDescription?: RTCSessionDescription;
     private remoteDescriptionSet: boolean = false;
@@ -105,7 +104,7 @@ export class PeerConnection extends EventEmitter {
      * @returns {Promise}
      */
     async waitForChannelToOpen(): Promise<RTCDataChannel> {
-        return timeLimitedPromise(new Promise<RTCDataChannel>((resolve) => {
+        return await timeLimitedPromise(new Promise<RTCDataChannel>((resolve) => {
 
             const resolvedChannel: RTCDataChannel = this.rtcDataChannel as RTCDataChannel;
             if (resolvedChannel.readyState === "open") {
@@ -120,7 +119,7 @@ export class PeerConnection extends EventEmitter {
             else {
                 throw new Error(`Data channel was in illegal state: ${resolvedChannel.readyState}`);
             }
-        }), this.channelStateTimeoutMs).finally(() => {
+        }), this.channelStateTimeoutMs, "Channel opening timeout exceeded").finally(() => {
             (this.rtcDataChannel as RTCDataChannel).onopen = null;
         });
     }
@@ -169,7 +168,6 @@ export class PeerConnection extends EventEmitter {
 
         delete this.localIceCandidates;
         delete this.storedIceCandidates;
-        delete this.lastOutstandingPromise;
         delete this.remoteDescription;
     };
 
