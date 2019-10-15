@@ -1,8 +1,7 @@
-import {Promise} from 'bluebird';
 import {EventEmitter} from 'events';
-import {Logger} from 'cyclon.p2p-common';
+import {Logger, timeLimitedPromise} from 'cyclon.p2p-common';
 import {RTCObjectFactory} from './RTCObjectFactory';
-import {AnswerMessage} from "./SignallingService";
+import {AnswerMessage} from './SignallingService';
 
 export class PeerConnection extends EventEmitter {
 
@@ -43,33 +42,23 @@ export class PeerConnection extends EventEmitter {
      *
      * @returns {Promise}
      */
-    createOffer(): Promise<RTCSessionDescriptionInit> {
+    async createOffer(): Promise<RTCSessionDescriptionInit> {
+        //
+        // Create the data channel
+        //
+        this.rtcDataChannel = this.rtcPeerConnection.createDataChannel("cyclonShuffleChannel");
+        this.emit("channelCreated", this.rtcDataChannel);
 
-        this.lastOutstandingPromise = new Promise((resolve, reject) => {
-
-            //
-            // Create the data channel
-            //
-            this.rtcDataChannel = this.rtcPeerConnection.createDataChannel("cyclonShuffleChannel");
-            this.emit("channelCreated", this.rtcDataChannel);
-
-            //
-            // Create an offer, wait for ICE candidates
-            //
-            const offerOptions:RTCOfferOptions = {
-                offerToReceiveAudio: false,     // see https://code.google.com/p/webrtc/issues/detail?id=2108
-                offerToReceiveVideo: false
-            };
-            this.rtcPeerConnection.createOffer(offerOptions).then((sdp: RTCSessionDescriptionInit) => {
-                this.localDescription = sdp;
-                return this.rtcPeerConnection.setLocalDescription(this.localDescription);
-            }).then(() => {
-                resolve(this.localDescription);
-            }, reject);
-        })
-        .cancellable();
-
-        return this.lastOutstandingPromise;
+        //
+        // Create an offer, wait for ICE candidates
+        //
+        const offerOptions:RTCOfferOptions = {
+            offerToReceiveAudio: false,     // see https://code.google.com/p/webrtc/issues/detail?id=2108
+            offerToReceiveVideo: false
+        };
+        this.localDescription = await this.rtcPeerConnection.createOffer(offerOptions);
+        await this.rtcPeerConnection.setLocalDescription(this.localDescription);
+        return this.localDescription;
     }
 
     /**
@@ -78,37 +67,26 @@ export class PeerConnection extends EventEmitter {
      * @param remoteDescription
      * @returns {Promise}
      */
-    createAnswer(remoteDescription: RTCSessionDescriptionInit): Promise<void> {
+    async createAnswer(remoteDescription: RTCSessionDescriptionInit): Promise<void> {
+        await this.rtcPeerConnection.setRemoteDescription(this.rtcObjectFactory.createRTCSessionDescription(remoteDescription));
 
-        this.lastOutstandingPromise = new Promise((resolve, reject) => {
-
-            this.rtcPeerConnection.setRemoteDescription(this.rtcObjectFactory.createRTCSessionDescription(remoteDescription)).then(() => {
-
-                // Process any ICE candidates that arrived before the description was set
-                this.remoteDescriptionSet = true;
-                this.processRemoteIceCandidates([]);
-
-                return this.rtcPeerConnection.createAnswer();
-            }).then((sdp: RTCSessionDescriptionInit) => {
-                this.localDescription = sdp;
-                return this.rtcPeerConnection.setLocalDescription(this.localDescription);
-            }).then(resolve, reject);
-        })
-        .cancellable();
-
-        return this.lastOutstandingPromise;
+        // Process any ICE candidates that arrived before the description was set
+        this.remoteDescriptionSet = true;
+        this.processRemoteIceCandidates([]);
+        this.localDescription =  await this.rtcPeerConnection.createAnswer();
+        await this.rtcPeerConnection.setLocalDescription(this.localDescription);
     }
 
     /**
      * Process some remote ICE candidates
      */
-    processRemoteIceCandidates(remoteIceCandidates: RTCIceCandidateInit[]): void {
+    async processRemoteIceCandidates(remoteIceCandidates: RTCIceCandidateInit[]): Promise<void> {
         this.remoteIceCandidateCache = this.remoteIceCandidateCache.concat(remoteIceCandidates);
         if (this.remoteDescriptionSet) {
-            this.remoteIceCandidateCache.forEach((iceCandidate: RTCIceCandidateInit) => {
+            await Promise.all(this.remoteIceCandidateCache.map(async (iceCandidate: RTCIceCandidateInit) => {
                 this.logger.debug(`Adding remote ICE candidate: ${iceCandidate.candidate}`);
-                this.rtcPeerConnection.addIceCandidate(this.rtcObjectFactory.createRTCIceCandidate(iceCandidate));
-            });
+                await this.rtcPeerConnection.addIceCandidate(this.rtcObjectFactory.createRTCIceCandidate(iceCandidate));
+            }));
             this.remoteIceCandidateCache = [];
         }
     }
@@ -126,9 +104,8 @@ export class PeerConnection extends EventEmitter {
      *
      * @returns {Promise}
      */
-    waitForChannelToOpen(): Promise<RTCDataChannel> {
-
-        this.lastOutstandingPromise = new Promise((resolve) => {
+    async waitForChannelToOpen(): Promise<RTCDataChannel> {
+        return timeLimitedPromise(new Promise<RTCDataChannel>((resolve) => {
 
             const resolvedChannel: RTCDataChannel = this.rtcDataChannel as RTCDataChannel;
             if (resolvedChannel.readyState === "open") {
@@ -143,18 +120,9 @@ export class PeerConnection extends EventEmitter {
             else {
                 throw new Error(`Data channel was in illegal state: ${resolvedChannel.readyState}`);
             }
-        })
-        .timeout(this.channelStateTimeoutMs, "Channel opening timeout exceeded")
-        .catch(Promise.TimeoutError, (e) => {
+        }), this.channelStateTimeoutMs).finally(() => {
             (this.rtcDataChannel as RTCDataChannel).onopen = null;
-            throw e;
-        })
-        .catch(Promise.CancellationError, (e) => {
-            (this.rtcDataChannel as RTCDataChannel).onopen = null;
-            throw e;
         });
-
-        return this.lastOutstandingPromise;
     }
 
     /**
@@ -162,18 +130,11 @@ export class PeerConnection extends EventEmitter {
      *
      * @returns {Promise}
      */
-    handleAnswer(answerMessage: AnswerMessage): Promise<void> {
-
-        this.lastOutstandingPromise = new Promise((resolve, reject) => {
-            const remoteDescription = answerMessage.sessionDescription;
-            this.rtcPeerConnection.setRemoteDescription(this.rtcObjectFactory.createRTCSessionDescription(remoteDescription)).then(() => {
-                this.remoteDescriptionSet = true;
-                this.processRemoteIceCandidates([]);
-                resolve();
-            }, reject);
-        });
-
-        return this.lastOutstandingPromise;
+    async handleAnswer(answerMessage: AnswerMessage): Promise<void> {
+        const remoteDescription = answerMessage.sessionDescription;
+        await this.rtcPeerConnection.setRemoteDescription(this.rtcObjectFactory.createRTCSessionDescription(remoteDescription));
+        this.remoteDescriptionSet = true;
+        await this.processRemoteIceCandidates([]);
     }
 
     getLocalIceCandidates(): RTCIceCandidate[] {
@@ -185,15 +146,6 @@ export class PeerConnection extends EventEmitter {
             throw new Error("Local description is not yet set!");
         }
         return this.localDescription;
-    };
-
-    /**
-     * Cancel the last outstanding promise (if there is one)
-     */
-    cancel(): void {
-        if (this.lastOutstandingPromise && this.lastOutstandingPromise.isPending()) {
-            this.lastOutstandingPromise.cancel();
-        }
     };
 
     /**

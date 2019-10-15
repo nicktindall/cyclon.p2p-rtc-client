@@ -1,6 +1,5 @@
 'use strict';
 
-var Promise = require("bluebird");
 var {PeerConnection} = require("../lib/PeerConnection");
 var ClientMocks = require("./ClientMocks");
 
@@ -49,8 +48,8 @@ describe("The peer connection", function () {
         //
         rtcPeerConnection.createDataChannel.and.returnValue(rtcDataChannel);
 
-        rtcPeerConnection.setLocalDescription.and.returnValue(Promise.delay(1));
-        rtcPeerConnection.setRemoteDescription.and.returnValue(Promise.delay(1));
+        rtcPeerConnection.setLocalDescription.and.returnValue(Promise.resolve());
+        rtcPeerConnection.setRemoteDescription.and.returnValue(Promise.resolve());
         rtcObjectFactory.createRTCSessionDescription.and.callFake(function (sessionDescriptionString) {
             return remoteDescriptionFor(sessionDescriptionString);
         });
@@ -104,22 +103,6 @@ describe("The peer connection", function () {
                 expect(peerConnection.getLocalDescription()).toBe(LOCAL_DESCRIPTION);
             });
         });
-
-        describe("and cancel is called before it completes", function () {
-
-            it("rejects with a cancellation error", function (done) {
-                rtcPeerConnection.createOffer.and.returnValue(Promise.defer().promise);
-
-                peerConnection.createOffer()
-                    .then(() => done.fail("Should have failed!"))
-                    .catch(Promise.CancellationError,function () {
-                        expect(rtcPeerConnection.createDataChannel).toHaveBeenCalledWith('cyclonShuffleChannel');
-                        done();
-                    })
-                    .catch((e) => done.fail("Unexpected error" + e))
-                    .cancel();
-            });
-        });
     });
 
     describe("when gathering ICE candidates", function () {
@@ -171,7 +154,8 @@ describe("The peer connection", function () {
     describe("when creating an answer", function () {
 
         it("will set the remote description", function (done) {
-            rtcPeerConnection.createAnswer.and.returnValue(Promise.defer().promise);
+            rtcPeerConnection.createAnswer.and.returnValue(new Promise(() => {
+            }));
 
             peerConnection.createAnswer(REMOTE_DESCRIPTION)
                 .then(successCallback).catch(failureCallback);
@@ -209,22 +193,6 @@ describe("The peer connection", function () {
             });
 
             it("doesn't set the local description and rejects", function () {
-                expect(rtcPeerConnection.setLocalDescription).not.toHaveBeenCalled();
-            });
-        });
-
-        describe("and cancel is called while it's in progress", function () {
-
-            beforeEach(function (done) {
-                rtcPeerConnection.createAnswer.and.returnValue(Promise.defer().promise);
-                peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)
-                    .then(() => done.fail("Should not have succeeded"))
-                    .catch(Promise.CancellationError, done)
-                    .catch((e) => done.fail("Unexpected error " + e))
-                    .cancel();
-            });
-
-            it("doesn't set the local description and rejects with a cancellation error", function () {
                 expect(rtcPeerConnection.setLocalDescription).not.toHaveBeenCalled();
             });
         });
@@ -286,22 +254,7 @@ describe("The peer connection", function () {
             describe("and a timeout occurs before the channel is opened", function () {
 
                 beforeEach(function (done) {
-                    peerConnection.waitForChannelToOpen().catch(Promise.TimeoutError, done);
-                });
-
-                it("clears the channel onopen listener", function () {
-                    expect(rtcDataChannel.onopen).toBeNull();
-                });
-            });
-
-            describe("and cancel is called before the channel is opened", function () {
-
-                beforeEach(function (done) {
-                    peerConnection.waitForChannelToOpen()
-                        .then(() => done.fail("Should have failed!"))
-                        .catch(Promise.CancellationError, done)
-                        .catch((e) => done.fail("Unexpected error" + e))
-                        .cancel();
+                    peerConnection.waitForChannelToOpen().catch(done);
                 });
 
                 it("clears the channel onopen listener", function () {
@@ -318,7 +271,7 @@ describe("The peer connection", function () {
 
             it("waits for the channel to open", function (done) {
                 peerConnection.waitForChannelToOpen()
-                    .catch(Promise.TimeoutError, done);
+                    .catch(done);
             });
         });
 
@@ -331,7 +284,7 @@ describe("The peer connection", function () {
             it("rejects with an error", function (done) {
                 var self = this;
                 peerConnection.waitForChannelToOpen()
-                    .catch(Promise.CancellationError, Promise.TimeoutError, function(e) {
+                    .catch(e => {
                         self.fail(e);
                     })
                     .catch(done);
@@ -356,7 +309,7 @@ describe("The peer connection", function () {
     describe("when processing remote ICE candidates", function() {
 
         beforeEach(function(done) {
-            rtcPeerConnection.createOffer.and.returnValue(Promise.delay(1, LOCAL_DESCRIPTION));
+            rtcPeerConnection.createOffer.and.returnValue(Promise.resolve(LOCAL_DESCRIPTION));
             peerConnection.createOffer().then(done);
         });
 
@@ -435,39 +388,6 @@ describe("The peer connection", function () {
 
             expect(rtcDataChannel.close).toHaveBeenCalled();
             expect(rtcPeerConnection.close).toHaveBeenCalled();
-        });
-    });
-
-    describe("when cancelling", function () {
-
-        it("will cancel the last outstanding promise if it's pending", function (done) {
-
-            peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)
-                .catch(Promise.CancellationError, function() {
-                    done();
-                });
-
-            peerConnection.cancel();
-        });
-
-        describe("and the last outstanding promise is completed", function() {
-
-            beforeEach(function(done) {
-                rtcPeerConnection.createAnswer.and.returnValue(Promise.resolve(LOCAL_DESCRIPTION));
-
-                peerConnection.createAnswer(REMOTE_DESCRIPTION, REMOTE_ICE_CANDIDATES)
-                    .then(done)
-                    .catch(Promise.CancellationError, failureCallback);
-            });
-
-            it("will not cancel the last outstanding promise", function (done) {
-                peerConnection.cancel();
-
-                setTimeout(function () {
-                    expect(failureCallback).not.toHaveBeenCalled();
-                    done();
-                }, 10);
-            });
         });
     });
 });
