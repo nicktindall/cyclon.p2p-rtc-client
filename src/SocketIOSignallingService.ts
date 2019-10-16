@@ -1,4 +1,3 @@
-import {Promise} from 'bluebird';
 import url from 'url';
 import {MetadataProvider} from 'cyclon.p2p';
 import {BufferingEventEmitter, generateGuid, Logger, shuffleArray, UnreachableError} from 'cyclon.p2p-common';
@@ -68,38 +67,34 @@ export class SocketIOSignallingService implements SignallingService {
      * @param type
      * @param sessionDescription
      */
-    sendOffer(destinationNode: WebRTCCyclonNodePointer, type: string, sessionDescription: RTCSessionDescription) {
+    async sendOffer(destinationNode: WebRTCCyclonNodePointer, type: string, sessionDescription: RTCSessionDescription): Promise<number> {
         this.logger.debug(`Sending offer SDP to ${destinationNode.id}`);
 
         const correlationId = this.correlationIdCounter++;
         const localPointer = this.createNewPointer();
 
-        return this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/offer", {
+        await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/offer", {
             channelType: type,
             sourceId: localPointer.id,
             correlationId: correlationId,
             sourcePointer: localPointer,
             destinationId: destinationNode.id,
             sessionDescription: sessionDescription
-        })
-        .then(function() {
-            return correlationId;
         });
+        return correlationId;
     }
 
-    waitForAnswer(correlationId: number): Promise<AnswerMessage> {
-        return new Promise((resolve) => {
-            this.answerEmitter.once("answer-" + correlationId, (answer: AnswerMessage) => {
-                resolve(answer);
-            });
-        })
-        .cancellable()
-        .catch(Promise.CancellationError, (e: Promise.CancellationError) => {
-            this.logger.warn("Clearing wait listener for correlation ID " + correlationId);
+    async waitForAnswer(correlationId: number): Promise<AnswerMessage> {
+        try {
+            return await new Promise((resolve) => {
+                this.answerEmitter.once("answer-" + correlationId, (answer: AnswerMessage) => {
+                    resolve(answer);
+                });
+            })
+        } finally {
             this.answerEmitter.removeAllListeners("answer-" + correlationId);
-            throw e;
-        }) as Promise<AnswerMessage>;
-    };
+        }
+    }
 
     /**
      * Create a new pointer to this RTC node
@@ -127,7 +122,7 @@ export class SocketIOSignallingService implements SignallingService {
         // Populate current signalling details
         pointer.signalling = this.signallingSocket.getCurrentServerSpecs();
         return pointer;
-    };
+    }
 
     /**
      * Get the next pointer sequence number (restoring from storage if it's present)
@@ -146,7 +141,7 @@ export class SocketIOSignallingService implements SignallingService {
         Get the local node ID
     */
     getLocalId(): string {
-        if(this.localId === undefined) {
+        if (this.localId === undefined) {
             const storedId = this.storage.getItem(RTC_LOCAL_ID_STORAGE_KEY);
             if(storedId !== null) {
                 this.localId = storedId;
@@ -157,7 +152,7 @@ export class SocketIOSignallingService implements SignallingService {
             }
         }
         return this.localId as string;
-    };
+    }
 
     /**
      * Send an answer message over the signalling channel
@@ -166,26 +161,26 @@ export class SocketIOSignallingService implements SignallingService {
      * @param correlationId
      * @param sessionDescription
      */
-    sendAnswer(destinationNode: WebRTCCyclonNodePointer, correlationId: number, sessionDescription: RTCSessionDescription): Promise<void> {
+    async sendAnswer(destinationNode: WebRTCCyclonNodePointer, correlationId: number, sessionDescription: RTCSessionDescription): Promise<void> {
         this.logger.debug(`Sending answer SDP to ${destinationNode.id}`);
 
-        return this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/answer", {
+        return await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/answer", {
             sourceId: this.getLocalId(),
             correlationId: correlationId,
             destinationId: destinationNode.id,
             sessionDescription: sessionDescription
         });
-    };
+    }
 
     /**
      * Send an array of one or more ICE candidates
      */
-    sendIceCandidates(destinationNode: WebRTCCyclonNodePointer, correlationId: number, iceCandidates: RTCIceCandidate[]) {
+    async sendIceCandidates(destinationNode: WebRTCCyclonNodePointer, correlationId: number, iceCandidates: RTCIceCandidate[]): Promise<void> {
         iceCandidates.forEach((candidate: RTCIceCandidate) => {
             this.logger.debug(`Sending ice candidate: ${candidate.candidate} to ${destinationNode.id}`);
         });
 
-        return this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/candidates", {
+        return await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/candidates", {
             sourceId: this.getLocalId(),
             correlationId: correlationId,
             destinationId: destinationNode.id,
@@ -202,22 +197,19 @@ export class SocketIOSignallingService implements SignallingService {
      * @param message
      * @returns {Promise}
      */
-    private postToFirstAvailableServer(destinationNode: WebRTCCyclonNodePointer, signallingServers: SignallingServerSpec[], path: string, message: any): Promise<void> {
+    private async postToFirstAvailableServer(destinationNode: WebRTCCyclonNodePointer, signallingServers: SignallingServerSpec[], path: string, message: any): Promise<any> {
 
-        return new Promise((resolve, reject) => {
-            if (signallingServers.length === 0) {
-                reject(new UnreachableError(SocketIOSignallingService.createUnreachableErrorMessage(destinationNode)));
+        if (signallingServers.length === 0) {
+            throw new UnreachableError(SocketIOSignallingService.createUnreachableErrorMessage(destinationNode));
+        }
+        else {
+            try {
+                await this.httpRequestService.post(url.resolve(signallingServers[0].signallingApiBase, path), message);
+            } catch (error) {
+                this.logger.warn(`An error occurred sending signalling message using ${signallingServers[0].signallingApiBase} trying next signalling server`, error);
+                await this.postToFirstAvailableServer(destinationNode, signallingServers.slice(1), path, message);
             }
-            else {
-                //noinspection JSCheckFunctionSignatures
-                this.httpRequestService.post(url.resolve(signallingServers[0].signallingApiBase, path), message)
-                    .then(resolve)
-                    .catch((error: Error) => {
-                        this.logger.warn(`An error occurred sending signalling message using ${signallingServers[0].signallingApiBase} trying next signalling server`, error);
-                        this.postToFirstAvailableServer(destinationNode, signallingServers.slice(1), path, message).then(resolve, reject);
-                    });
-            }
-        });
+        }
     }
 
     private static createUnreachableErrorMessage(destinationNode: WebRTCCyclonNodePointer) {

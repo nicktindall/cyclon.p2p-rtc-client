@@ -1,14 +1,13 @@
 'use strict';
 
-var Promise = require("bluebird");
-var events = require("events");
-var {SocketIOSignallingService} = require("../lib/SocketIOSignallingService");
-var ClientMocks = require("./ClientMocks");
-var {UnreachableError} = require("cyclon.p2p-common");
+const events = require("events");
+const {SocketIOSignallingService} = require("../lib/SocketIOSignallingService");
+const ClientMocks = require("./ClientMocks");
+const {UnreachableError} = require("cyclon.p2p-common");
 
-describe("The socket.io signalling service", function () {
+describe("The socket.io signalling service", () => {
 
-    var signallingService,
+    let signallingService,
         loggingService,
         signallingSocket,
         httpRequestService,
@@ -18,11 +17,11 @@ describe("The socket.io signalling service", function () {
         capFailure,
         storage;
 
-    var STORED_ID_STORAGE_KEY = "cyclon-rtc-local-node-id";
-    var LOCAL_ID = "LOCAL_ID";
-    var REMOTE_ID = "REMOTE_ID";
-    var SIGNALLING_BASE = "http://signalling-base.com/path/to/";
-    var DESTINATION_NODE = {
+    const STORED_ID_STORAGE_KEY = "cyclon-rtc-local-node-id";
+    const LOCAL_ID = "LOCAL_ID";
+    const REMOTE_ID = "REMOTE_ID";
+    const SIGNALLING_BASE = "http://signalling-base.com/path/to/";
+    const DESTINATION_NODE = {
         id: REMOTE_ID,
         signalling: [
             {
@@ -30,18 +29,17 @@ describe("The socket.io signalling service", function () {
             }
         ]
     };
-    var SESSION_DESCRIPTION = "SESSION_DESCRIPTION";
-    var ICE_CANDIDATES = ["a", "b", "c"];
-    var NODE_POINTER = "NODE_POINTER";
-    var TYPE = "TYPE";
-    var CORRELATION_ID = "CORRELATION_ID";
-    var LOCAL_SERVER_SPECS = [
+    const SESSION_DESCRIPTION = "SESSION_DESCRIPTION";
+    const ICE_CANDIDATES = ["a", "b", "c"];
+    const TYPE = "TYPE";
+    const CORRELATION_ID = "CORRELATION_ID";
+    const LOCAL_SERVER_SPECS = [
         {signallingApiBase: "http://signalling.api/base"}
     ];
-    var METADATA_PROVIDERS = [function () {
+    const METADATA_PROVIDERS = [function () {
     }, function () {
     }];
-    var ROOMS = ["room", "otherRoom"];
+    const ROOMS = ["room", "otherRoom"];
 
     beforeEach(function () {
         successCallback = ClientMocks.createSuccessCallback();
@@ -174,7 +172,7 @@ describe("The socket.io signalling service", function () {
             };
 
             signallingService.sendAnswer(destinationNodeWithNoSignallingServers, SESSION_DESCRIPTION)
-                .catch(UnreachableError, done);
+                .catch(done);
         });
 
         it("should throw an UnreachableError when the peer is no longer connected to any of its signalling servers", function (done) {
@@ -183,29 +181,45 @@ describe("The socket.io signalling service", function () {
 
             signallingService.sendAnswer(DESTINATION_NODE, SESSION_DESCRIPTION, ICE_CANDIDATES)
                 .then(successCallback)
-                .catch(UnreachableError, done);
+                .catch(done);
         });
     });
 
-    describe("when waiting for an answer", function () {
+    describe("when waiting for an answer", () => {
 
-        beforeEach(function () {
+        beforeEach(() => {
             signallingSocket = new events.EventEmitter();
             signallingSocket.connect = jasmine.createSpy('connect');
 
             signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
-            signallingService.connect();
+            signallingService.connect({}, []);
         });
 
-        it("resolves with the answer message when the correlated answer arrives", function () {
+        it("resolves with the answer message when the correlated answer arrives", (done) => {
 
-            var message = {
+            const message = {
                 sourceId: REMOTE_ID,
                 correlationId: CORRELATION_ID
             };
 
             signallingService.waitForAnswer(CORRELATION_ID).then(function (result) {
                 expect(result).toBe(message);
+                done();
+            });
+
+            signallingSocket.emit("answer", message);
+        });
+
+        it("clears the answer listener when the correlated answer arrives", (done) => {
+
+            const message = {
+                sourceId: REMOTE_ID,
+                correlationId: CORRELATION_ID
+            };
+
+            signallingService.waitForAnswer(CORRELATION_ID).then(function () {
+                expect(signallingSocket.listenerCount(`answer-${CORRELATION_ID}`)).toEqual(0);
+                done();
             });
 
             signallingSocket.emit("answer", message);
@@ -213,7 +227,7 @@ describe("The socket.io signalling service", function () {
 
         it("ignores non-correlated answers", function (done) {
 
-            var message = {
+            const message = {
                 sourceId: REMOTE_ID,
                 correlationId: "OTHER_" + CORRELATION_ID
             };
@@ -226,31 +240,6 @@ describe("The socket.io signalling service", function () {
                 expect(failureCallback).not.toHaveBeenCalled();
                 done();
             }, 10);
-        });
-
-        describe("and cancel is called", function () {
-
-            beforeEach(function (done) {
-                signallingService.waitForAnswer(CORRELATION_ID)
-                    .then(successCallback)
-                    .catch(Promise.CancellationError, done)
-                    .cancel();
-            });
-
-            it("stops listening for the answer message", function (done) {
-
-                var message = {
-                    sourceId: REMOTE_ID,
-                    correlationId: CORRELATION_ID
-                };
-
-                signallingSocket.emit("answer", message);
-
-                setTimeout(function () {
-                    expect(successCallback).not.toHaveBeenCalled();
-                    done();
-                }, 100);
-            });
         });
     });
 
@@ -265,7 +254,7 @@ describe("The socket.io signalling service", function () {
             signallingSocket.connect = jasmine.createSpy('connect');
 
             signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
-            signallingService.connect();
+            signallingService.connect({}, []);
         });
 
         it("emits an offer event with the message", function () {
@@ -293,7 +282,7 @@ describe("The socket.io signalling service", function () {
             signallingSocket.connect = jasmine.createSpy('connect');
 
             signallingService = new SocketIOSignallingService(signallingSocket, loggingService, httpRequestService, storage);
-            signallingService.connect();
+            signallingService.connect({}, []);
         });
 
         it("emits an candidates event with the message", function () {
