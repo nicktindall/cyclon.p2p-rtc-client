@@ -6,7 +6,7 @@ import {AnswerMessage} from './SignallingService';
 export class PeerConnection extends EventEmitter {
 
     private localIceCandidates: RTCIceCandidate[] = [];
-    private storedIceCandidates: { [serialized:string]: boolean } = {};
+    private storedIceCandidates: { [serialized: string]: boolean } = {};
     private rtcDataChannel?: RTCDataChannel;
     private localDescription?: RTCSessionDescriptionInit;
     private emittingIceCandidates: boolean = false;
@@ -32,7 +32,7 @@ export class PeerConnection extends EventEmitter {
         //
         rtcPeerConnection.ondatachannel = (event: RTCDataChannelEvent) => {
             this.rtcDataChannel = event.channel;
-            this.emit("channelCreated", event.channel);
+            this.emit('channelCreated', event.channel);
         };
     }
 
@@ -45,13 +45,13 @@ export class PeerConnection extends EventEmitter {
         //
         // Create the data channel
         //
-        this.rtcDataChannel = this.rtcPeerConnection.createDataChannel("cyclonShuffleChannel");
-        this.emit("channelCreated", this.rtcDataChannel);
+        this.rtcDataChannel = this.rtcPeerConnection.createDataChannel('cyclonShuffleChannel');
+        this.emit('channelCreated', this.rtcDataChannel);
 
         //
         // Create an offer, wait for ICE candidates
         //
-        const offerOptions:RTCOfferOptions = {
+        const offerOptions: RTCOfferOptions = {
             offerToReceiveAudio: false,     // see https://code.google.com/p/webrtc/issues/detail?id=2108
             offerToReceiveVideo: false
         };
@@ -72,7 +72,7 @@ export class PeerConnection extends EventEmitter {
         // Process any ICE candidates that arrived before the description was set
         this.remoteDescriptionSet = true;
         this.processRemoteIceCandidates([]);
-        this.localDescription =  await this.rtcPeerConnection.createAnswer();
+        this.localDescription = await this.rtcPeerConnection.createAnswer();
         await this.rtcPeerConnection.setLocalDescription(this.localDescription);
     }
 
@@ -104,24 +104,24 @@ export class PeerConnection extends EventEmitter {
      * @returns {Promise}
      */
     async waitForChannelToOpen(): Promise<RTCDataChannel> {
-        return await timeLimitedPromise(new Promise<RTCDataChannel>((resolve) => {
+        try {
+            return await timeLimitedPromise(new Promise<RTCDataChannel>((resolve) => {
 
-            const resolvedChannel: RTCDataChannel = this.rtcDataChannel as RTCDataChannel;
-            if (resolvedChannel.readyState === "open") {
-                resolve(this.rtcDataChannel);
-            }
-            else if (typeof(resolvedChannel.readyState) === "undefined" || resolvedChannel.readyState === "connecting") {
-                resolvedChannel.onopen = function () {
-                    resolvedChannel.onopen = null;
-                    resolve(resolvedChannel);
-                };
-            }
-            else {
-                throw new Error(`Data channel was in illegal state: ${resolvedChannel.readyState}`);
-            }
-        }), this.channelStateTimeoutMs, "Channel opening timeout exceeded").finally(() => {
+                const resolvedChannel: RTCDataChannel = this.rtcDataChannel as RTCDataChannel;
+                if (resolvedChannel.readyState === 'open') {
+                    resolve(this.rtcDataChannel);
+                } else if (typeof (resolvedChannel.readyState) === 'undefined' || resolvedChannel.readyState === 'connecting') {
+                    resolvedChannel.onopen = function () {
+                        resolvedChannel.onopen = null;
+                        resolve(resolvedChannel);
+                    };
+                } else {
+                    throw new Error(`Data channel was in illegal state: ${resolvedChannel.readyState}`);
+                }
+            }), this.channelStateTimeoutMs, 'Channel opening timeout exceeded');
+        } finally {
             (this.rtcDataChannel as RTCDataChannel).onopen = null;
-        });
+        }
     }
 
     /**
@@ -142,7 +142,7 @@ export class PeerConnection extends EventEmitter {
 
     getLocalDescription(): RTCSessionDescriptionInit {
         if (!this.localDescription) {
-            throw new Error("Local description is not yet set!");
+            throw new Error('Local description is not yet set!');
         }
         return this.localDescription;
     };
@@ -189,7 +189,7 @@ export class PeerConnection extends EventEmitter {
         // Emit an iceCandidates event containing all the candidates
         // gathered since the last event if we are emitting
         if (this.emittingIceCandidates && this.localIceCandidates.length > 0) {
-            this.emit("iceCandidates", this.localIceCandidates);
+            this.emit('iceCandidates', this.localIceCandidates);
             this.localIceCandidates = [];
         }
     }
