@@ -1,12 +1,11 @@
 'use strict';
 
-var Promise = require("bluebird");
-var ClientMocks = require("./ClientMocks");
-var {IceCandidateBatchingSignallingService} = require("../lib/IceCandidateBatchingSignallingService");
+const ClientMocks = require("./ClientMocks");
+const {IceCandidateBatchingSignallingService} = require("../lib/IceCandidateBatchingSignallingService");
 
 describe("The ICE candidate batching signalling service decorator", function() {
 
-    var SESSION_METADATA_PROVIDERS = "SESSION_METADATA_PROVIDERS",
+    const SESSION_METADATA_PROVIDERS = "SESSION_METADATA_PROVIDERS",
         ROOMS = "ROOMS",
         DESTINATION_NODE = {
             id: "DESTINATION_NODE_ID"
@@ -21,7 +20,7 @@ describe("The ICE candidate batching signalling service decorator", function() {
         SEND_ANSWER_RESULT = "SEND_ANSWER_RESULT",
         BATCHING_DELAY_MS = 200;
 
-    var batchingService,
+    let batchingService,
         wrappedService,
         asyncExecService,
         sendIceCandidatesResponse;
@@ -51,16 +50,16 @@ describe("The ICE candidate batching signalling service decorator", function() {
 
     describe("when sending an offer", function() {
 
-        it("delegates to the wrapped signalling service", function() {
-            expect(batchingService.sendOffer(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION)).toBe(SEND_OFFER_RESULT);
+        it("delegates to the wrapped signalling service", async () => {
+            expect(await batchingService.sendOffer(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION)).toBe(SEND_OFFER_RESULT);
             expect(wrappedService.sendOffer).toHaveBeenCalledWith(DESTINATION_NODE, TYPE, SESSION_DESCRIPTION);
         });
     });
 
     describe("when waiting for an answer", function() {
 
-        it("delegates to the wrapped signalling service", function() {
-            expect(batchingService.waitForAnswer(CORRELATION_ID)).toBe(WAIT_FOR_ANSWER_RESULT);
+        it("delegates to the wrapped signalling service", async () => {
+            expect(await batchingService.waitForAnswer(CORRELATION_ID)).toBe(WAIT_FOR_ANSWER_RESULT);
             expect(wrappedService.waitForAnswer).toHaveBeenCalledWith(CORRELATION_ID);
         });
     });
@@ -83,8 +82,8 @@ describe("The ICE candidate batching signalling service decorator", function() {
 
     describe("when sending an answer", function() {
 
-        it("delegates to the wrapped signalling service", function() {
-            expect(batchingService.sendAnswer(DESTINATION_NODE, CORRELATION_ID, SESSION_DESCRIPTION)).toBe(SEND_ANSWER_RESULT);
+        it("delegates to the wrapped signalling service", async () => {
+            expect(await batchingService.sendAnswer(DESTINATION_NODE, CORRELATION_ID, SESSION_DESCRIPTION)).toBe(SEND_ANSWER_RESULT);
             expect(wrappedService.sendAnswer).toHaveBeenCalledWith(DESTINATION_NODE, CORRELATION_ID, SESSION_DESCRIPTION);
         });
     });

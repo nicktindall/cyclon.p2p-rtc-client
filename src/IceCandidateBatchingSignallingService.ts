@@ -1,8 +1,7 @@
-import {Promise} from 'bluebird';
-import {AsyncExecService, Logger} from "cyclon.p2p-common";
-import {AnswerMessage, SignallingService} from "./SignallingService";
-import {MetadataProvider} from "cyclon.p2p";
-import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
+import {AsyncExecService, Logger} from 'cyclon.p2p-common';
+import {AnswerMessage, SignallingService} from './SignallingService';
+import {MetadataProvider} from 'cyclon.p2p';
+import {WebRTCCyclonNodePointer} from './WebRTCCyclonNodePointer';
 
 /**
  * A decorator for a signalling service that batches ICE candidate messages to
@@ -15,8 +14,8 @@ import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
  */
 export class IceCandidateBatchingSignallingService implements SignallingService {
 
-    private queuedCandidates: any;
-    private deliveryPromises: any;
+    private readonly queuedCandidates: { [nodeId: string]: { [correlationId: number]: RTCIceCandidate[] } };
+    private readonly deliveryPromises: { [nodeId: string]: { [correlationId: number]: Promise<void> } };
 
     constructor(private readonly asyncExecService: AsyncExecService,
                 private readonly signallingService: SignallingService,
@@ -38,12 +37,12 @@ export class IceCandidateBatchingSignallingService implements SignallingService 
         this.signallingService.connect(metadataProviders, rooms);
     }
 
-    sendOffer(destinationNode: WebRTCCyclonNodePointer, type: string, sessionDescription: RTCSessionDescriptionInit): Promise<number> {
-        return this.signallingService.sendOffer(destinationNode, type, sessionDescription);
+    async sendOffer(destinationNode: WebRTCCyclonNodePointer, type: string, sessionDescription: RTCSessionDescriptionInit): Promise<number> {
+        return await this.signallingService.sendOffer(destinationNode, type, sessionDescription);
     }
 
-    waitForAnswer(correlationId: number): Promise<AnswerMessage> {
-        return this.signallingService.waitForAnswer(correlationId);
+    async waitForAnswer(correlationId: number): Promise<AnswerMessage> {
+        return await this.signallingService.waitForAnswer(correlationId);
     }
 
     createNewPointer(): WebRTCCyclonNodePointer {
@@ -54,34 +53,32 @@ export class IceCandidateBatchingSignallingService implements SignallingService 
         return this.signallingService.getLocalId();
     }
 
-    sendAnswer(destinationNode: WebRTCCyclonNodePointer, correlationId: number, sessionDescription: RTCSessionDescriptionInit): Promise<void> {
-        return this.signallingService.sendAnswer(destinationNode, correlationId, sessionDescription);
+    async sendAnswer(destinationNode: WebRTCCyclonNodePointer, correlationId: number, sessionDescription: RTCSessionDescriptionInit): Promise<void> {
+        return await this.signallingService.sendAnswer(destinationNode, correlationId, sessionDescription);
     }
 
-    sendIceCandidates(destinationNode: WebRTCCyclonNodePointer, correlationId: number, iceCandidates: RTCIceCandidate[]) {
+    async sendIceCandidates(destinationNode: WebRTCCyclonNodePointer, correlationId: number, iceCandidates: RTCIceCandidate[]): Promise<void> {
         let newQueue = iceCandidates;
         const existingQueue = this.getQueue(destinationNode.id, correlationId);
         if (existingQueue) {
             newQueue = existingQueue.concat(iceCandidates);
-        }
-        else {
+        } else {
             // This is the first set of candidates to be queued for the destination/correlationId combo, schedule their delivery
             this.setPromise(destinationNode.id, correlationId, this.scheduleCandidateDelivery(destinationNode, correlationId));
         }
         this.setQueue(destinationNode.id, correlationId, newQueue);
-        return this.getPromise(destinationNode.id, correlationId);
+        return await this.getPromise(destinationNode.id, correlationId);
     };
 
-    private getPromise(destinationNodeId: string, correlationId: number) {
+    private getPromise(destinationNodeId: string, correlationId: number): Promise<void> {
         if (this.deliveryPromises.hasOwnProperty(destinationNodeId) && this.deliveryPromises[destinationNodeId].hasOwnProperty(correlationId)) {
             return this.deliveryPromises[destinationNodeId][correlationId];
-        }
-        else {
-            throw new Error("Couldn't locate promise for send?! (this should never happen)");
+        } else {
+            throw new Error('Couldn\'t locate promise for send?! (this should never happen)');
         }
     }
 
-    private setPromise(nodeId: string, correlationId: number, newPromise: Promise<any>) {
+    private setPromise(nodeId: string, correlationId: number, newPromise: Promise<void>): void {
         if (!this.deliveryPromises.hasOwnProperty(nodeId)) {
             this.deliveryPromises[nodeId] = {};
         }
@@ -102,7 +99,7 @@ export class IceCandidateBatchingSignallingService implements SignallingService 
         return null;
     }
 
-    private setQueue(nodeId: string, correlationId: number, newQueue: RTCIceCandidate[]) {
+    private setQueue(nodeId: string, correlationId: number, newQueue: RTCIceCandidate[]): void {
         if (!this.queuedCandidates.hasOwnProperty(nodeId)) {
             this.queuedCandidates[nodeId] = {};
         }
@@ -116,7 +113,7 @@ export class IceCandidateBatchingSignallingService implements SignallingService 
         }
     }
 
-    private scheduleCandidateDelivery(destinationNode: WebRTCCyclonNodePointer, correlationId: number) {
+    private scheduleCandidateDelivery(destinationNode: WebRTCCyclonNodePointer, correlationId: number): Promise<void> {
         return new Promise((resolve, reject) => {
             this.asyncExecService.setTimeout(() => {
                 const queueToSend = this.getQueue(destinationNode.id, correlationId);
