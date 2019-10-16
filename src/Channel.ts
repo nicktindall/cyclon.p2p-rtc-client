@@ -1,11 +1,11 @@
 import {Logger, BufferingEventEmitter, timeLimitedPromise} from 'cyclon.p2p-common';
 import {AnswerMessage, SignallingService} from './SignallingService';
-import {PeerConnection} from "./PeerConnection";
-import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
+import {PeerConnection} from './PeerConnection';
+import {WebRTCCyclonNodePointer} from './WebRTCCyclonNodePointer';
 
 export class Channel {
 
-    private channelEstablishedEventEmitter:BufferingEventEmitter;
+    private channelEstablishedEventEmitter: BufferingEventEmitter;
     private messages: BufferingEventEmitter;
     private resolvedCorrelationId?: number;
     private channelType?: string;
@@ -21,10 +21,10 @@ export class Channel {
         this.channelEstablishedEventEmitter = new BufferingEventEmitter();
         this.messages = new BufferingEventEmitter();
 
-        peerConnection.on("channelCreated", (channel: RTCDataChannel) => {
+        peerConnection.on('channelCreated', (channel: RTCDataChannel) => {
             this.rtcDataChannel = channel;
             this.addMessageListener();
-            this.channelEstablishedEventEmitter.emit("channelEstablished");
+            this.channelEstablishedEventEmitter.emit('channelEstablished');
         });
     }
 
@@ -38,7 +38,7 @@ export class Channel {
 
     private verifyCorrelationId(): number {
         if (!this.correlationIdIsResolved()) {
-            throw new Error("Correlation ID is not resolved");
+            throw new Error('Correlation ID is not resolved');
         }
         return this.resolvedCorrelationId as number;
     }
@@ -50,7 +50,7 @@ export class Channel {
             try {
                 await this.peerConnection.processRemoteIceCandidates(message.iceCandidates);
             } catch (error) {
-                this.logger.error("Error handling peer candidates", error);
+                this.logger.error('Error handling peer candidates', error);
             }
         });
     }
@@ -82,13 +82,13 @@ export class Channel {
             this.channelEstablishedEventEmitter.once('channelEstablished', () => {
                 resolve(this);
             });
-        }), this.channelStateTimeoutMs);
+        }), this.channelStateTimeoutMs, 'Data channel establishment timeout exceeded');
     }
 
     startSendingIceCandidates(): void {
         const correlationId = this.verifyCorrelationId();
 
-        this.peerConnection.on("iceCandidates", (candidates: RTCIceCandidate[]) => {
+        this.peerConnection.on('iceCandidates', (candidates: RTCIceCandidate[]) => {
             this.signallingService.sendIceCandidates(this.remotePeer, correlationId, candidates).catch((error) => {
                 this.logger.warn(`An error occurred sending ICE candidates to ${this.remotePeer.id}`, error);
             });
@@ -97,18 +97,15 @@ export class Channel {
     }
 
     stopSendingIceCandidates(): Channel {
-        this.peerConnection.removeAllListeners("iceCandidates");
+        this.peerConnection.removeAllListeners('iceCandidates');
         return this;
     }
 
     async sendOffer(): Promise<void> {
-        return await this.signallingService.sendOffer(
+        this.resolvedCorrelationId = await this.signallingService.sendOffer(
             this.remotePeer,
             this.channelType as string,
-            this.peerConnection.getLocalDescription())
-            .then((correlationId) => {
-                this.resolvedCorrelationId = correlationId;
-            });
+            this.peerConnection.getLocalDescription());
     }
 
     async waitForAnswer(): Promise<AnswerMessage> {
@@ -134,7 +131,7 @@ export class Channel {
         try {
             return JSON.parse(message);
         } catch (e) {
-            throw new Error("Bad message received from " + this.remotePeer.id + " : '" + message + "'");
+            throw new Error(`Bad message received from ${this.remotePeer.id } : \'${message}\'`);
         }
     }
 
@@ -146,10 +143,10 @@ export class Channel {
      */
     send(type: string, message?: any): void {
         if (this.rtcDataChannel === undefined) {
-            throw new Error("Data channel has not yet been established!");
+            throw new Error('Data channel has not yet been established!');
         }
         const channelState = String(this.rtcDataChannel.readyState);
-        if ("open" !== channelState) {
+        if ('open' !== channelState) {
             throw new Error(`Data channel must be in 'open' state to send messages (actual state: ${channelState})`);
         }
         this.rtcDataChannel.send(JSON.stringify({
@@ -165,25 +162,29 @@ export class Channel {
      * @param timeoutInMilliseconds
      */
     async receive(messageType: string, timeoutInMilliseconds: number): Promise<string> {
-        let handlerFunction: (... args: any[]) => void;
+        let handlerFunction: ((...args: any[]) => void) | undefined;
 
-        return await timeLimitedPromise(new Promise<string>((resolve, reject) => {
+        try {
+            return await timeLimitedPromise(new Promise<string>((resolve, reject) => {
 
-            if (this.rtcDataChannel === undefined || "open" !== String(this.rtcDataChannel.readyState)) {
-                reject(new Error(`Data channel must be in 'open' state to receive ${messageType} message`));
+                if (this.rtcDataChannel === undefined || 'open' !== String(this.rtcDataChannel.readyState)) {
+                    reject(new Error(`Data channel must be in 'open' state to receive ${messageType} message`));
+                }
+
+                //
+                // Add the handler
+                //
+                handlerFunction = (message: string): void => {
+                    resolve(message);
+                };
+
+                this.messages.once(messageType, handlerFunction);
+            }), this.channelStateTimeoutMs, `Timeout reached waiting for '${messageType}' message (from ${this.remotePeer.id})`);
+        } finally {
+            if (handlerFunction) {
+                this.messages.removeListener(messageType, handlerFunction);
             }
-
-            //
-            // Add the handler
-            //
-            handlerFunction = (message: string): void => {
-                resolve(message);
-            };
-
-            this.messages.once(messageType, handlerFunction);
-        }), this.channelStateTimeoutMs, `Timeout reached waiting for '${messageType}' message (from ${this.remotePeer.id})`).finally(() => {
-            this.messages.removeListener(messageType, handlerFunction);
-        });
+        }
     }
 
     close() {
