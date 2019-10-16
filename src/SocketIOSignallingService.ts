@@ -1,14 +1,14 @@
 import url from 'url';
 import {MetadataProvider} from 'cyclon.p2p';
 import {BufferingEventEmitter, generateGuid, Logger, shuffleArray, UnreachableError} from 'cyclon.p2p-common';
-import {HttpRequestService} from "./HttpRequestService";
-import {SignallingSocket} from "./SignallingSocket";
-import {AnswerMessage, IceCandidatesMessage, SignallingMessage, SignallingService} from "./SignallingService";
-import {SignallingServerSpec} from "./SignallingServerSpec";
-import {WebRTCCyclonNodePointer} from "./WebRTCCyclonNodePointer";
+import {HttpRequestService} from './HttpRequestService';
+import {SignallingSocket} from './SignallingSocket';
+import {AnswerMessage, IceCandidatesMessage, SignallingMessage, SignallingService} from './SignallingService';
+import {SignallingServerSpec} from './SignallingServerSpec';
+import {WebRTCCyclonNodePointer} from './WebRTCCyclonNodePointer';
 
-const POINTER_SEQUENCE_STORAGE_KEY = "cyclon-rtc-pointer-sequence-counter";
-const RTC_LOCAL_ID_STORAGE_KEY = "cyclon-rtc-local-node-id";
+const POINTER_SEQUENCE_STORAGE_KEY = 'cyclon-rtc-pointer-sequence-counter';
+const RTC_LOCAL_ID_STORAGE_KEY = 'cyclon-rtc-local-node-id';
 
 export class SocketIOSignallingService implements SignallingService {
 
@@ -30,21 +30,21 @@ export class SocketIOSignallingService implements SignallingService {
         this.answerEmitter = new BufferingEventEmitter();
 
         // Listen for signalling messages
-        signallingSocket.on("answer", (message: SignallingMessage) => {
+        signallingSocket.on('answer', (message: SignallingMessage) => {
             logger.debug(`Answer received from: ${message.sourceId} (correlationId ${message.correlationId})`);
             this.answerEmitter.emit(`answer-${message.correlationId}`, message);
         });
-        signallingSocket.on("offer", (message: SignallingMessage) => {
+        signallingSocket.on('offer', (message: SignallingMessage) => {
             logger.debug(`Offer received from: ${message.sourceId} (correlationId ${message.correlationId})`);
-            this.eventEmitter.emit("offer", message);
+            this.eventEmitter.emit('offer', message);
         });
-        signallingSocket.on("candidates", (message: IceCandidatesMessage) => {
+        signallingSocket.on('candidates', (message: IceCandidatesMessage) => {
             logger.debug(`${message.iceCandidates.length} ICE Candidates received from: ${message.sourceId} (correlationId ${message.correlationId})`);
             this.eventEmitter.emit(`candidates-${message.sourceId}-${message.correlationId}`, message);
         });
     }
 
-    on(eventType: string, handler: (... args: any[]) => void): void {
+    on(eventType: string, handler: (...args: any[]) => void): void {
         this.eventEmitter.on(eventType, handler);
     }
 
@@ -73,7 +73,7 @@ export class SocketIOSignallingService implements SignallingService {
         const correlationId = this.correlationIdCounter++;
         const localPointer = this.createNewPointer();
 
-        await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/offer", {
+        await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), './api/offer', {
             channelType: type,
             sourceId: localPointer.id,
             correlationId: correlationId,
@@ -87,12 +87,12 @@ export class SocketIOSignallingService implements SignallingService {
     async waitForAnswer(correlationId: number): Promise<AnswerMessage> {
         try {
             return await new Promise((resolve) => {
-                this.answerEmitter.once("answer-" + correlationId, (answer: AnswerMessage) => {
+                this.answerEmitter.once(`answer-${correlationId}`, (answer: AnswerMessage) => {
                     resolve(answer);
                 });
             })
         } finally {
-            this.answerEmitter.removeAllListeners("answer-" + correlationId);
+            this.answerEmitter.removeAllListeners(`answer-${correlationId}`);
         }
     }
 
@@ -112,8 +112,7 @@ export class SocketIOSignallingService implements SignallingService {
             for (const metaDataKey in this.metadataProviders) {
                 try {
                     pointer.metadata[metaDataKey] = this.metadataProviders[metaDataKey]();
-                }
-                catch(e) {
+                } catch (e) {
                     this.logger.error(`An error occurred generating metadata (key: ${metaDataKey}`, e);
                 }
             }
@@ -138,15 +137,14 @@ export class SocketIOSignallingService implements SignallingService {
     }
 
     /**
-        Get the local node ID
-    */
+     Get the local node ID
+     */
     getLocalId(): string {
         if (this.localId === undefined) {
             const storedId = this.storage.getItem(RTC_LOCAL_ID_STORAGE_KEY);
-            if(storedId !== null) {
+            if (storedId !== null) {
                 this.localId = storedId;
-            }
-            else {
+            } else {
                 this.localId = generateGuid();
                 this.storage.setItem(RTC_LOCAL_ID_STORAGE_KEY, this.localId as string);
             }
@@ -164,7 +162,7 @@ export class SocketIOSignallingService implements SignallingService {
     async sendAnswer(destinationNode: WebRTCCyclonNodePointer, correlationId: number, sessionDescription: RTCSessionDescription): Promise<void> {
         this.logger.debug(`Sending answer SDP to ${destinationNode.id}`);
 
-        return await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/answer", {
+        return await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), './api/answer', {
             sourceId: this.getLocalId(),
             correlationId: correlationId,
             destinationId: destinationNode.id,
@@ -180,7 +178,7 @@ export class SocketIOSignallingService implements SignallingService {
             this.logger.debug(`Sending ice candidate: ${candidate.candidate} to ${destinationNode.id}`);
         });
 
-        return await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), "./api/candidates", {
+        return await this.postToFirstAvailableServer(destinationNode, SocketIOSignallingService.randomiseServerOrder(destinationNode), './api/candidates', {
             sourceId: this.getLocalId(),
             correlationId: correlationId,
             destinationId: destinationNode.id,
@@ -201,8 +199,7 @@ export class SocketIOSignallingService implements SignallingService {
 
         if (signallingServers.length === 0) {
             throw new UnreachableError(SocketIOSignallingService.createUnreachableErrorMessage(destinationNode));
-        }
-        else {
+        } else {
             try {
                 await this.httpRequestService.post(url.resolve(signallingServers[0].signallingApiBase, path), message);
             } catch (error) {
