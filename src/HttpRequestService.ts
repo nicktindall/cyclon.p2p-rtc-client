@@ -1,6 +1,5 @@
 import http, {ClientRequest, IncomingMessage} from 'http';
 import url  from 'url';
-import {Promise} from 'bluebird';
 
 export class HttpRequestService {
 
@@ -20,7 +19,7 @@ export class HttpRequestService {
         }
         let req: ClientRequest;
 
-        return new Promise(function (resolve: Function, reject: Function) {
+        return new Promise((resolve: Function, reject: Function) => {
             const options = {
                 withCredentials: false,
                 hostname: parsedUrl.hostname,
@@ -36,13 +35,13 @@ export class HttpRequestService {
                 }
             }
 
-            req = http.request(options, function (res: IncomingMessage) {
+            req = http.request(options, (res: IncomingMessage) => {
                 if (res.statusCode === expectedStatus) {
                     let responseContent: string = "";
-                    res.on("data", function (chunk) {
+                    res.on("data", (chunk) => {
                         responseContent += chunk;
                     });
-                    res.once("end", function () {
+                    res.once("end", () => {
                         res.removeAllListeners("data");
                         if (responseContentIsJson(res)) {
                             resolve(JSON.parse(responseContent));
@@ -61,9 +60,6 @@ export class HttpRequestService {
                 req.write(contentString);
             }
             req.end();
-        }).cancellable().catch(Promise.CancellationError, function (e) {
-            req.abort();
-            throw e;
         });
     }
 }
