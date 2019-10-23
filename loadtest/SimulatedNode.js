@@ -1,7 +1,5 @@
 'use strict';
 
-var Promise = require("bluebird");
-
 var SHUFFLE_INTERVAL_MS = 5000;
 var GATHERING_DELAY_MS = 500;
 var MOCK_OFFER_SDP = {
@@ -53,20 +51,17 @@ function SimulatedNode(signallingService, allNodes) {
         return lastShuffleTime;
     };
 
-    function simulateShuffle() {
-        var otherNode = chooseRandomNode();
-        var startTime = new Date().getTime();
-        signallingService.sendOffer(otherNode.getPointer(), "loadTest", MOCK_OFFER_SDP)
-            .then(signallingService.waitForAnswer)
-            .then(function(answerMessage) {
-                return sendIceCandidates(otherNode.getPointer(), answerMessage.correlationId);
-            })
-            .then(function() {
-                lastShuffleTime = new Date().getTime() - startTime;
-            })
-            .catch(function(error) {
-                console.log("An error occurred on an outgoing shuffle", error);
-            });
+    async function simulateShuffle() {
+        try {
+            const otherNode = chooseRandomNode();
+            const startTime = new Date().getTime();
+            await signallingService.sendOffer(otherNode.getPointer(), "loadTest", MOCK_OFFER_SDP);
+            const answerMessage = await signallingService.waitForAnswer();
+            await sendIceCandidates(otherNode.getPointer(), answerMessage.correlationId);
+            lastShuffleTime = new Date().getTime() - startTime;
+        } catch (error) {
+            console.log("An error occurred on an outgoing shuffle", error);
+        }
     }
 
     function chooseRandomNode() {

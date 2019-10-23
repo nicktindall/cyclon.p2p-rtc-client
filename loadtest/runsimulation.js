@@ -1,6 +1,6 @@
 'use strict';
 
-var rtc = require("../src");
+var rtc = require("../lib");
 var Utils = require("cyclon.p2p-common");
 var SimulatedNode = require("./SimulatedNode");
 var SIGNALLING_SERVER = [
