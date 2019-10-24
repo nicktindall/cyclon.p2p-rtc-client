@@ -1,5 +1,5 @@
 import {asyncExecService, consoleLogger, Logger, newInMemoryStorage} from 'cyclon.p2p-common';
-import {RTC} from './rtc';
+import {RTC} from './RTC';
 import {ChannelFactory} from './ChannelFactory';
 import {SocketIOSignallingService} from './SocketIOSignallingService';
 import {RedundantSignallingSocket} from './RedundantSignallingSocket';

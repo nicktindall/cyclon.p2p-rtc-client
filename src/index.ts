@@ -9,7 +9,7 @@ import {NativeRTCObjectFactory} from './NativeRTCObjectFactory';
 import {ChannelFactory} from './ChannelFactory';
 import {Channel} from './Channel';
 import {PeerConnectionFactory} from './PeerConnectionFactory';
-import {RTC} from './rtc';
+import {RTC} from './RTC';
 import {SignallingServerSelector} from './SignallingServerSelector';
 import {WebRTCCyclonNodePointer} from './WebRTCCyclonNodePointer';
 import {Builder} from './Builder';
