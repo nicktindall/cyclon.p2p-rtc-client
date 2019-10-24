@@ -71,7 +71,7 @@ export class Builder {
 
     build(): BuilderResult {
         if (!this.result) {
-            const peerConnectionFactory = new PeerConnectionFactory(new NativeRTCObjectFactory(this.getLogger()), this.getLogger(), this.getIceServers(), this.getChannelStateTimeout());
+            const peerConnectionFactory = new PeerConnectionFactory(new NativeRTCObjectFactory(), this.getLogger(), this.getIceServers(), this.getChannelStateTimeout());
             const signallingService = this.getSignallingService();
             this.result = {
                 rtc: new RTC(signallingService, new ChannelFactory(peerConnectionFactory, signallingService, this.getLogger(), this.getChannelStateTimeout())),

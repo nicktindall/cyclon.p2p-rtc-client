@@ -40,40 +40,10 @@ describe("The PeerConnectionFactory", function() {
             });
 
             it("creates the ICE candidates", function() {
-                var firstCreateIceServerResponse = ["server11", "server12"];
-                var secondCreateIceServerResponse = ["server2"];
-                var sequence = 0;
-                rtcObjectFactory.createIceServers.and.callFake(function() {
-                    return [firstCreateIceServerResponse, secondCreateIceServerResponse][sequence++];
-                });
-
                 peerConnectionFactory.createPeerConnection();
 
-                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith(ICE_SERVERS[0].urls, ICE_SERVERS[0].username, ICE_SERVERS[0].credential);
-                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith([ICE_SERVERS[1].urls], ICE_SERVERS[1].username, ICE_SERVERS[1].credential);
                 expect(rtcObjectFactory.createRTCPeerConnection).toHaveBeenCalledWith({
-                    iceServers: firstCreateIceServerResponse.concat(secondCreateIceServerResponse)
-                });
-            });
-        });
-
-        describe("and there are unsupported ICE servers", function() {
-            beforeEach(function() {
-                peerConnectionFactory = new PeerConnectionFactory(rtcObjectFactory, logger, ICE_SERVERS, CHANNEL_STATE_TIMEOUT);
-            });
-
-            it("generates a peerConnectionConfig with the unsupported iceServers omitted", function() {
-                var secondCreateIceServerResponse = ["server2"];
-                var sequence = 0;
-                rtcObjectFactory.createIceServers.and.callFake(function() {
-                    return [null, secondCreateIceServerResponse][sequence++];
-                });
-                peerConnectionFactory.createPeerConnection();
-
-                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith(ICE_SERVERS[0].urls, ICE_SERVERS[0].username, ICE_SERVERS[0].credential);
-                expect(rtcObjectFactory.createIceServers).toHaveBeenCalledWith([ICE_SERVERS[1].urls], ICE_SERVERS[1].username, ICE_SERVERS[1].credential);
-                expect(rtcObjectFactory.createRTCPeerConnection).toHaveBeenCalledWith({
-                    iceServers: secondCreateIceServerResponse
+                    iceServers: ICE_SERVERS
                 });
             });
         });
