@@ -161,7 +161,7 @@ export class Channel {
      * @param messageType
      * @param timeoutInMilliseconds
      */
-    async receive(messageType: string, timeoutInMilliseconds: number): Promise<string> {
+    async receive(messageType: string, timeoutInMilliseconds: number): Promise<any> {
         let handlerFunction: ((...args: any[]) => void) | undefined;
 
         try {
@@ -174,7 +174,7 @@ export class Channel {
                 //
                 // Add the handler
                 //
-                handlerFunction = (message: string): void => {
+                handlerFunction = (message: any): void => {
                     resolve(message);
                 };
 
